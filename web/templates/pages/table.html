@@ -1,0 +1,89 @@
+{{define "content"}}
+{{with .Data}}
+<nav class="crumbs" aria-label="Lokasi">
+  <a href="/dashboard">Database</a> /
+  <a href="/databases/{{.DB.ID}}?schema={{.Schema}}">{{.DB.Name}}</a> /
+  <span class="mono">{{.Schema}}.{{.Table}}</span>
+</nav>
+<header class="pagehead"><h1 class="mono">{{.Schema}}.{{.Table}}</h1></header>
+<nav class="tabs" aria-label="Bagian tabel">
+  <a href="/databases/{{.DB.ID}}/tables/{{pathseg .Schema}}/{{pathseg .Table}}"{{if eq .Tab "structure"}} aria-current="page"{{end}}>Struktur</a>
+  <a href="/databases/{{.DB.ID}}/tables/{{pathseg .Schema}}/{{pathseg .Table}}/data"{{if eq .Tab "data"}} aria-current="page"{{end}}>Data</a>
+</nav>
+
+{{if eq .Tab "structure"}}
+  <h2>Kolom</h2>
+  <div class="scroll">
+  <table>
+    <thead><tr><th class="num">#</th><th>Nama</th><th>Tipe</th><th>Boleh NULL</th></tr></thead>
+    <tbody>
+    {{range .Detail.Columns}}
+      <tr>
+        <td class="num muted">{{.Position}}</td>
+        <td class="mono">{{.Name}}</td>
+        <td class="mono">{{.DataType}}</td>
+        <td>{{if .IsNullable}}Ya{{else}}Tidak{{end}}</td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+
+  <h2>Constraint</h2>
+  {{if .Detail.Constraints}}
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Nama</th><th>Jenis</th><th>Definisi</th></tr></thead>
+    <tbody>
+    {{range .Detail.Constraints}}
+      <tr><td class="mono">{{.Name}}</td><td>{{.Type}}</td><td class="mono">{{.Definition}}</td></tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+  {{else}}<p class="muted">Tidak ada constraint.</p>{{end}}
+
+  <h2>Index</h2>
+  {{if .Detail.Indexes}}
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Nama</th><th>Jenis</th><th>Definisi</th></tr></thead>
+    <tbody>
+    {{range .Detail.Indexes}}
+      <tr>
+        <td class="mono">{{.Name}}</td>
+        <td>{{if .IsPrimary}}Primary{{else if .IsUnique}}Unik{{else}}Biasa{{end}}</td>
+        <td class="mono">{{.Definition}}</td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+  {{else}}<p class="muted">Tidak ada index.</p>{{end}}
+
+{{else}}
+  {{if .Data.Rows}}
+  <p class="muted">Baris {{.From}}–{{.To}} dari {{.Data.Total}}</p>
+  <div class="scroll datagrid">
+  <table>
+    <thead><tr>{{range .Data.Columns}}<th class="mono">{{.}}</th>{{end}}</tr></thead>
+    <tbody>
+    {{range .Data.Rows}}
+      <tr>{{range .}}<td class="mono">{{if .Null}}<span class="null">NULL</span>{{else}}{{.Text}}{{end}}</td>{{end}}</tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+  {{if gt .Pages 1}}
+  <nav class="pager" aria-label="Halaman data">
+    {{if .PrevPage}}<a href="?page={{.PrevPage}}" rel="prev">Sebelumnya</a>{{else}}<span class="muted">Sebelumnya</span>{{end}}
+    <span>Halaman {{.Data.Page}} dari {{.Pages}}</span>
+    {{if .NextPage}}<a href="?page={{.NextPage}}" rel="next">Berikutnya</a>{{else}}<span class="muted">Berikutnya</span>{{end}}
+  </nav>
+  {{end}}
+  {{else}}
+  <div class="empty"><p>Tabel ini belum berisi data.</p></div>
+  {{end}}
+{{end}}
+{{end}}
+{{end}}
