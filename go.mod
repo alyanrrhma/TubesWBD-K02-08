@@ -1,4 +1,4 @@
-module github.com/kelompok/if3110-tubes
+module github.com/alyanrrhma/TubesWBD-K02-08
 
 go 1.25.0
 

@@ -1,0 +1,98 @@
+{{define "content"}}
+{{with .Data}}
+<nav class="crumbs" aria-label="Lokasi"><a href="/admin/groups">Group</a> / <span>{{.Group.Name}}</span></nav>
+<header class="pagehead">
+  <h1>{{.Group.Name}}</h1>
+  <form method="post" action="/admin/groups/{{.Group.ID}}/delete" data-confirm="Hapus group {{.Group.Name}}? Akses database yang diberikan lewat group ini ikut hilang.">
+    <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+    <button class="btn-danger-quiet" type="submit">Hapus group</button>
+  </form>
+</header>
+
+<section>
+  <h2>Akses database</h2>
+  {{if .Access}}
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Database</th><th>Level</th><th></th></tr></thead>
+    <tbody>
+    {{range .Access}}
+      <tr>
+        <td><strong>{{.DatabaseName}}</strong></td>
+        <td><span class="level level-{{levelClass .Level}}">{{levelLabel .Level}}</span></td>
+        <td class="actions">
+          <form method="post" action="/admin/groups/{{.GroupID}}/access/{{.DatabaseID}}/revoke" data-confirm="Cabut akses {{.DatabaseName}} dari group ini?">
+            <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+            <button class="btn-danger-quiet" type="submit">Cabut</button>
+          </form>
+        </td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+  {{else}}
+  <div class="empty"><p>Group ini belum punya akses ke database mana pun.</p></div>
+  {{end}}
+
+  {{if .Connections}}
+  <form method="post" action="/admin/groups/{{.Group.ID}}/access" class="inline-form">
+    <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+    <label>Database
+      <select name="database_id" required>
+        {{range .Connections}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+      </select>
+    </label>
+    <label>Level
+      <select name="level" required>
+        <option value="VIEW_ONLY">View Only</option>
+        <option value="VIEW_EDIT">View + Edit</option>
+      </select>
+    </label>
+    <button class="btn" type="submit">Simpan akses</button>
+  </form>
+  <p class="muted">Memilih database yang sudah punya akses akan mengubah levelnya. Jika pengguna ada di beberapa group, akses tertinggi yang berlaku.</p>
+  {{else}}
+  <p class="muted">Belum ada koneksi database. <a href="/admin/connections">Tambahkan koneksi</a> terlebih dahulu.</p>
+  {{end}}
+</section>
+
+<section>
+  <h2>Anggota</h2>
+  {{if .Members}}
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Username</th><th></th></tr></thead>
+    <tbody>
+    {{range .Members}}
+      <tr>
+        <td><strong>{{.Username}}</strong></td>
+        <td class="actions">
+          <form method="post" action="/admin/groups/{{$.Data.Group.ID}}/members/{{.ID}}/remove" data-confirm="Keluarkan {{.Username}} dari group ini?">
+            <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+            <button class="btn-danger-quiet" type="submit">Keluarkan</button>
+          </form>
+        </td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+  {{else}}
+  <div class="empty"><p>Group ini belum punya anggota.</p></div>
+  {{end}}
+
+  {{if .Candidates}}
+  <form method="post" action="/admin/groups/{{.Group.ID}}/members" class="inline-form">
+    <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+    <label>Tambah anggota
+      <select name="user_id" required>
+        {{range .Candidates}}<option value="{{.ID}}">{{.Username}}</option>{{end}}
+      </select>
+    </label>
+    <button class="btn" type="submit">Tambah anggota</button>
+  </form>
+  {{end}}
+</section>
+{{end}}
+{{end}}

@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{if .Title}}{{.Title}} – {{end}}Database Platform</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#main">Lewati ke konten</a>
+{{if .User}}
+<header class="topbar">
+  <a class="brand" href="/dashboard">Database Platform</a>
+  <nav aria-label="Navigasi utama">
+    <a href="/dashboard"{{if eq .Nav "dashboard"}} aria-current="page"{{end}}>Database</a>
+    {{if .User.IsAdmin}}
+    <a href="/admin/users"{{if eq .Nav "users"}} aria-current="page"{{end}}>Pengguna</a>
+    <a href="/admin/groups"{{if eq .Nav "groups"}} aria-current="page"{{end}}>Group</a>
+    <a href="/admin/connections"{{if eq .Nav "connections"}} aria-current="page"{{end}}>Koneksi</a>
+    {{end}}
+  </nav>
+  <form class="userbox" method="post" action="/logout">
+    <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+    <span class="whoami">{{.User.Username}}{{if .User.IsAdmin}} <span class="tag">Admin</span>{{end}}</span>
+    <button class="btn-quiet" type="submit">Keluar</button>
+  </form>
+</header>
+{{end}}
+<main id="main" class="page{{if not .User}} page-narrow{{end}}">
+  {{with .Flash}}<div class="flash flash-{{.Kind}}" role="{{if eq .Kind "error"}}alert{{else}}status{{end}}">{{.Message}}</div>{{end}}
+  {{template "content" .}}
+</main>
+</body>
+</html>

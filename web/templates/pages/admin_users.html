@@ -1,0 +1,42 @@
+{{define "content"}}
+{{with .Data}}
+<h1>Pengguna</h1>
+<div class="scroll">
+<table>
+  <thead><tr><th>Username</th><th>Peran</th><th>Dibuat</th><th></th></tr></thead>
+  <tbody>
+  {{range .Users}}
+    <tr>
+      <td><strong>{{.Username}}</strong>{{if eq .ID $.Data.SelfID}} <span class="tag">Anda</span>{{end}}</td>
+      <td>{{if .IsAdmin}}Platform Admin{{else}}Pengguna{{end}}</td>
+      <td>{{fmtTime .CreatedAt}}</td>
+      <td class="actions">
+        {{if ne .ID $.Data.SelfID}}
+        <form method="post" action="/admin/users/{{.ID}}/delete" data-confirm="Hapus pengguna {{.Username}}? Sesi aktifnya ikut berakhir.">
+          <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+          <button class="btn-danger-quiet" type="submit">Hapus</button>
+        </form>
+        {{end}}
+      </td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+
+<section>
+  <h2>Tambah pengguna</h2>
+  <form method="post" action="/admin/users" class="stack form-narrow">
+    <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+    <label>Username
+      <input name="username" autocomplete="off" autocapitalize="none" spellcheck="false" required>
+    </label>
+    <label>Password awal
+      <input name="password" type="password" autocomplete="new-password" required>
+    </label>
+    <label class="check"><input type="checkbox" name="is_admin"> Jadikan Platform Admin</label>
+    <div><button class="btn" type="submit">Tambah pengguna</button></div>
+  </form>
+</section>
+{{end}}
+{{end}}

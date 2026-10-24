@@ -3,7 +3,8 @@ package migration
 import (
 	"context"
 	"fmt"
-	"github.com/kelompok/if3110-tubes/internal/access"
+
+	"github.com/alyanrrhma/TubesWBD-K02-08/internal/access"
 )
 
 // AccessAuthorizer menyambungkan Authorizer ke modul akses P1

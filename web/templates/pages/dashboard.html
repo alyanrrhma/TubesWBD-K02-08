@@ -1,0 +1,27 @@
+{{define "content"}}
+<h1>Database</h1>
+{{if .Data}}
+<p class="lede">Database yang dapat Anda akses, sesuai group Anda.</p>
+<div class="scroll">
+<table>
+  <thead><tr><th>Nama</th><th>Alamat</th><th>Akses</th><th></th></tr></thead>
+  <tbody>
+  {{range .Data}}
+    <tr>
+      <td><a href="/databases/{{.ID}}"><strong>{{.Name}}</strong></a>{{if not .Active}} <span class="status status-idle">Koneksi tidak aktif</span>{{end}}</td>
+      <td class="mono">{{dbAddr .Host .Port .Database}}</td>
+      <td><span class="level level-{{levelClass .Level}}">{{levelLabel .Level}}</span></td>
+      <td class="actions"><a href="/databases/{{.ID}}">Jelajahi</a> <a href="/databases/{{.ID}}/migrations">Migration</a></td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{else}}
+<div class="empty">
+  <p><strong>Belum ada database yang bisa Anda akses.</strong></p>
+  <p>Akses diberikan lewat group. Minta Platform Admin memasukkan akun Anda ke group yang punya akses ke database.</p>
+  {{if .User.IsAdmin}}<p><a href="/admin/groups">Atur group dan akses</a></p>{{end}}
+</div>
+{{end}}
+{{end}}

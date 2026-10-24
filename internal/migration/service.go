@@ -8,8 +8,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/alyanrrhma/TubesWBD-K02-08/internal/database"
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/kelompok/if3110-tubes/internal/database"
 )
 
 const (
@@ -27,23 +28,24 @@ func (s *Service) Execute(ctx context.Context, userID, databaseID int64, sqlText
 		return Migration{}, fmt.Errorf("%w: user and database ID must be positive", ErrInvalidArgument)
 	}
 
-	sqlText = strings.TrimSpace(sqlText)
-	switch {
-		case sqlText == "":
-			return Migration{}, ErrEmptySQL
-		case len(sqlText) > maxSQLBytes:
-			return Migration{}, ErrSQLTooLarge
-		case strings.ContainsRune(sqlText, 0): // NUL di kolom text
-			return Migration{}, ErrInvalidSQL
-	}
-
-	// Otorisasi di backend, dicek setiap eksekusi (pencabutan akses langsung berlaku).
+	// Otorisasi harus dicek sebelum memvalidasi SQL atau menyentuh database agar
+	// pengguna tanpa izin tidak dapat memakai endpoint ini untuk menguji input.
 	ok, err := s.authz.CanEdit(ctx, userID, databaseID)
 	if err != nil {
 		return Migration{}, fmt.Errorf("check edit access: %w", err)
 	}
 	if !ok {
 		return Migration{}, ErrForbidden
+	}
+
+	sqlText = strings.TrimSpace(sqlText)
+	switch {
+	case sqlText == "":
+		return Migration{}, ErrEmptySQL
+	case len(sqlText) > maxSQLBytes:
+		return Migration{}, ErrSQLTooLarge
+	case strings.ContainsRune(sqlText, 0): // NUL di kolom text
+		return Migration{}, ErrInvalidSQL
 	}
 
 	target, err := s.targets.Get(databaseID)
@@ -75,7 +77,7 @@ func (s *Service) Execute(ctx context.Context, userID, databaseID int64, sqlText
 		return Migration{}, fmt.Errorf("%w: begin transaction: %v", database.ErrConnectFailed, err)
 	}
 	applyErr := applyInTx(opCtx, tx, sqlText)
-	// Isi dgn nilai yang diketahui 
+	// Susun riwayat berdasarkan hasil transaksi target.
 	rec := Migration{
 		DatabaseID: databaseID, Version: version, SQLText: sqlText,
 		ExecutedBy: userID, Status: StatusSuccess,

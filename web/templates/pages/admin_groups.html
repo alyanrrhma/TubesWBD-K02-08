@@ -1,0 +1,30 @@
+{{define "content"}}
+<h1>Group</h1>
+{{if .Data}}
+<div class="scroll">
+<table>
+  <thead><tr><th>Nama</th><th class="num">Anggota</th><th></th></tr></thead>
+  <tbody>
+  {{range .Data}}
+    <tr>
+      <td><a href="/admin/groups/{{.ID}}"><strong>{{.Name}}</strong></a></td>
+      <td class="num">{{.MemberCount}}</td>
+      <td class="actions"><a href="/admin/groups/{{.ID}}">Kelola</a></td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{else}}
+<div class="empty"><p>Belum ada group. Buat group pertama di bawah, lalu atur anggota dan akses databasenya.</p></div>
+{{end}}
+
+<section>
+  <h2>Buat group</h2>
+  <form method="post" action="/admin/groups" class="stack form-narrow">
+    <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+    <label>Nama group <input name="name" maxlength="64" required></label>
+    <div><button class="btn" type="submit">Buat group</button></div>
+  </form>
+</section>
+{{end}}
