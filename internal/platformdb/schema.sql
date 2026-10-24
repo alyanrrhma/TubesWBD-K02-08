@@ -1,4 +1,3 @@
--- Platform database schema owned collaboratively with P3.
 CREATE TABLE IF NOT EXISTS users (
  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
  username TEXT NOT NULL UNIQUE,

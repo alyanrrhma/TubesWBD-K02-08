@@ -6,7 +6,8 @@ import (
 	"errors"
 	"strings"
 	"testing"
-	"github.com/kelompok/if3110-tubes/internal/database"
+
+	"github.com/alyanrrhma/TubesWBD-K02-08/internal/database"
 )
 
 type fakeAuthz struct {
@@ -29,18 +30,19 @@ func TestExecute_RejectsBeforeTouchingDatabases(t *testing.T) {
 	editor := fakeAuthz{view: true, edit: true}
 
 	cases := []struct {
-		name  string
-		svc   *Service
-		uid   int64
-		dbID  int64
-		sql   string
-		want  error
+		name string
+		svc  *Service
+		uid  int64
+		dbID int64
+		sql  string
+		want error
 	}{
 		{"user id invalid", NewService(nil, fakeTargets{}, editor), 0, 1, "SELECT 1", ErrInvalidArgument},
 		{"empty sql", NewService(nil, fakeTargets{}, editor), 1, 1, "   ", ErrEmptySQL},
 		{"too large", NewService(nil, fakeTargets{}, editor), 1, 1, strings.Repeat("a", maxSQLBytes+1), ErrSQLTooLarge},
 		{"nul byte", NewService(nil, fakeTargets{}, editor), 1, 1, "SELECT '\x00'", ErrInvalidSQL},
 		{"view only", NewService(nil, fakeTargets{}, fakeAuthz{view: true}), 1, 1, "SELECT 1", ErrForbidden},
+		{"view only empty sql is still forbidden", NewService(nil, fakeTargets{}, fakeAuthz{view: true}), 1, 1, "", ErrForbidden},
 		{"not registered", NewService(nil, fakeTargets{err: database.ErrNotRegistered}, editor), 1, 1, "SELECT 1", database.ErrNotRegistered},
 	}
 	for _, c := range cases {

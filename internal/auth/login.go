@@ -45,7 +45,7 @@ func (s LoginService) Login(ctx context.Context, w http.ResponseWriter, username
 	return s.Sessions.Login(ctx, w, Principal{UserID: u.ID, Admin: u.Admin})
 }
 
-// RevokeCurrent should be used by login HTTP handler before issuing a replacement.
+// RevokeCurrent should be used by login HTTP handler before issuing a replacement
 func (s LoginService) RevokeCurrent(ctx context.Context, w http.ResponseWriter, r *http.Request) {
 	old, _, e := s.Sessions.Validate(ctx, w, r)
 	if e == nil {

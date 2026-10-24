@@ -3,13 +3,14 @@ package migration
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"net/url"
 	"os"
 	"strings"
 	"sync"
 	"testing"
-	"errors"
-	"github.com/kelompok/if3110-tubes/internal/access"
+
+	"github.com/alyanrrhma/TubesWBD-K02-08/internal/access"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
@@ -37,11 +38,11 @@ func setup(t *testing.T, authz Authorizer) (svc *Service, target *sql.DB, userID
 	if pDSN == "" || tDSN == "" {
 		t.Skip("TEST_PLATFORM_DATABASE_URL / TEST_TARGET_DATABASE_URL not set")
 	}
-	
+
 	platform := openTestDB(t, pDSN)
 	target = openTestDB(t, tDSN)
 
-	schema, err := os.ReadFile("../platformdb/schema.sql") 
+	schema, err := os.ReadFile("../platformdb/schema.sql")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -238,8 +239,8 @@ func TestRealAccess_Matrix(t *testing.T) {
 	})
 
 	cases := []struct {
-		name            string
-		uid             int64
+		name             string
+		uid              int64
 		canView, canEdit bool
 	}{
 		{"view only", viewer, true, false},
