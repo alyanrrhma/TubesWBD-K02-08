@@ -19,14 +19,27 @@ func (m *MemoryStore) Create(_ context.Context, s Session) error {
 	m.sessions[s.FamilyID] = s
 	return nil
 }
-func (m *MemoryStore) FindByTokenHash(_ context.Context, h [32]byte) (Session, error) {
+func (m *MemoryStore) FindByTokenHash(
+	_ context.Context,
+	h [32]byte,
+) (Session, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	for _, s := range m.sessions {
-		if s.TokenHash == h || s.OldTokenHash == h {
+		if s.Revoked {
+			continue
+		}
+
+		if s.TokenHash == h {
+			return s, nil
+		}
+
+		if s.OldTokenHash == h {
 			return s, nil
 		}
 	}
+
 	return Session{}, errors.New("not found")
 }
 func (m *MemoryStore) Save(_ context.Context, s Session) error {
@@ -57,5 +70,25 @@ func (m *MemoryStore) RevokeUser(_ context.Context, id int64) error {
 			m.sessions[k] = s
 		}
 	}
+	return nil
+}
+func (m *MemoryStore) CompareAndSwap(
+	_ context.Context,
+	s Session,
+	expectedTokenHash [32]byte,
+) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	current, ok := m.sessions[s.FamilyID]
+	if !ok || current.Revoked {
+		return ErrSessionConflict
+	}
+
+	if current.TokenHash != expectedTokenHash {
+		return ErrSessionConflict
+	}
+
+	m.sessions[s.FamilyID] = s
 	return nil
 }
