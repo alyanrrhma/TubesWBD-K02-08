@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: dbmp-postgres
+    environment:
+      POSTGRES_USER: dbmp
+      POSTGRES_PASSWORD: dbmp_dev_password
+      POSTGRES_DB: dbmp_internal
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data  # menyimpan data postgreSQL persisten meski container dibuat ulang
+      - ./scripts/postgres/init:/docker-entrypoint-initdb.d:ro  #memasukkan script sql lokal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dbmp -d dbmp_internal"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
