@@ -23,10 +23,7 @@ type Schema struct {
 type Constraint struct {
 	Name                string `json:"name"`
 	Type                string `json:"type"`
-	Column              string `json:"column"`
-	ReferencedSchema    string `json:"referenced_schema,omitempty"`
-	ReferencedTable     string `json:"referenced_table,omitempty"`
-	ReferencedColumn    string `json:"referenced_column,omitempty"`
+	Definition string `json:"definition"`
 }
 type Index struct {
 	Name      string `json:"name"`
@@ -172,72 +169,56 @@ func ListSchemas(ctx context.Context, db *sql.DB) ([]Schema, error) {
 
 // ListConstraints mengambil constraint dari tabel tertentu.
 func ListConstraints(ctx context.Context, db *sql.DB, schema string, table string) ([]Constraint, error) {
-	if db == nil {
-		return nil, fmt.Errorf("database connection is nil")
-	}
-	if schema == "" || table == "" {
-		return nil, fmt.Errorf("schema and table must not be empty")
-	}
+    if db == nil {
+        return nil, fmt.Errorf("database connection is nil")
+    }
+    if schema == "" || table == "" {
+        return nil, fmt.Errorf("schema and table must not be empty")
+    }
 
-	rows, err := db.QueryContext(ctx, `
-		SELECT
-			tc.constraint_name,
-			tc.constraint_type,
-			kcu.column_name,
-			CASE WHEN tc.constraint_type = 'FOREIGN KEY'
-				THEN ccu.table_schema ELSE NULL END,
-			CASE WHEN tc.constraint_type = 'FOREIGN KEY'
-				THEN ccu.table_name ELSE NULL END,
-			CASE WHEN tc.constraint_type = 'FOREIGN KEY'
-				THEN ccu.column_name ELSE NULL END
-		FROM information_schema.table_constraints tc
-		JOIN information_schema.key_column_usage kcu
-			ON tc.constraint_catalog = kcu.constraint_catalog
-			AND tc.constraint_schema = kcu.constraint_schema
-			AND tc.constraint_name = kcu.constraint_name
-			AND tc.table_schema = kcu.table_schema
-			AND tc.table_name = kcu.table_name
-		LEFT JOIN information_schema.constraint_column_usage ccu
-			ON tc.constraint_catalog = ccu.constraint_catalog
-			AND tc.constraint_schema = ccu.constraint_schema
-			AND tc.constraint_name = ccu.constraint_name
-		WHERE tc.table_schema = $1
-			AND tc.table_name = $2
-		ORDER BY tc.constraint_name, kcu.ordinal_position
-	`, schema, table)
-	if err != nil {
-		return nil, fmt.Errorf("list constraints: %w", err)
-	}
-	defer rows.Close()
+    const query = `
+        SELECT
+            c.conname,
+            CASE c.contype
+                WHEN 'p' THEN 'PRIMARY KEY'
+                WHEN 'u' THEN 'UNIQUE'
+                WHEN 'f' THEN 'FOREIGN KEY'
+                WHEN 'c' THEN 'CHECK'
+                WHEN 'x' THEN 'EXCLUDE'
+                ELSE 'OTHER'
+            END AS constraint_type,
+            pg_get_constraintdef(c.oid, true) AS definition
+        FROM pg_catalog.pg_constraint c
+        JOIN pg_catalog.pg_class t
+            ON t.oid = c.conrelid
+        JOIN pg_catalog.pg_namespace n
+            ON n.oid = t.relnamespace
+        WHERE n.nspname = $1
+          AND t.relname = $2
+        ORDER BY c.conname
+    `
 
-	constraints := make([]Constraint, 0)
+    rows, err := db.QueryContext(ctx, query, schema, table)
+    if err != nil {
+        return nil, fmt.Errorf("list table constraints: %w", err)
+    }
+    defer rows.Close()
 
-	for rows.Next() {
-		var c Constraint
-		var refSchema, refTable, refColumn sql.NullString
+    constraints := make([]Constraint, 0)
 
-		if err := rows.Scan(
-			&c.Name,
-			&c.Type,
-			&c.Column,
-			&refSchema,
-			&refTable,
-			&refColumn,
-		); err != nil {
-			return nil, fmt.Errorf("scan constraint: %w", err)
-		}
+    for rows.Next() {
+        var c Constraint
+        if err := rows.Scan(&c.Name, &c.Type, &c.Definition); err != nil {
+            return nil, fmt.Errorf("scan table constraint: %w", err)
+        }
+        constraints = append(constraints, c)
+    }
 
-		c.ReferencedSchema = refSchema.String
-		c.ReferencedTable = refTable.String
-		c.ReferencedColumn = refColumn.String
-		constraints = append(constraints, c)
-	}
+    if err := rows.Err(); err != nil {
+        return nil, fmt.Errorf("iterate table constraints: %w", err)
+    }
 
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate constraints: %w", err)
-	}
-
-	return constraints, nil
+    return constraints, nil
 }
 
 // ListIndexes mengambil index dari tabel tertentu.

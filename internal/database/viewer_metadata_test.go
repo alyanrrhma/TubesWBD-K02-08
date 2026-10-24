@@ -22,19 +22,21 @@ func TestListSchemas(t *testing.T) {
 }
 
 func TestListConstraints(t *testing.T) {
-	db, ctx, schema := createViewerTestTable(t)
+    db, ctx, schema := createViewerTestTable(t)
 
-	constraints, err := ListConstraints(ctx, db, schema, "items")
-	if err != nil {
-		t.Fatalf("ListConstraints failed: %v", err)
-	}
+    constraints, err := ListConstraints(ctx, db, schema, "items")
+    if err != nil {
+        t.Fatalf("ListConstraints failed: %v", err)
+    }
 
-	for _, c := range constraints {
-		if c.Type == "PRIMARY KEY" && c.Column == "id" {
-			return
-		}
-	}
-	t.Fatal("expected primary key on items.id")
+    for _, c := range constraints {
+        if c.Type == "PRIMARY KEY" &&
+            c.Definition == "PRIMARY KEY (id)" {
+            return
+        }
+    }
+
+    t.Fatal("expected primary key on items.id")
 }
 
 func TestListIndexes(t *testing.T) {
