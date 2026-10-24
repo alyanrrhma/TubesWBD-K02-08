@@ -13,24 +13,28 @@ import (
 )
 
 // OpenTarget membuka dan memeriksa koneksi ke database target.
+const connectTimeout = 5 * time.Second
+
 func OpenTarget(ctx context.Context, dsn string) (*sql.DB, error) {
 	if dsn == "" {
-		return nil, fmt.Errorf("target database DSN is empty")
+		return nil, fmt.Errorf("%w: target database DSN is empty", ErrInvalidArgument)
 	}
 
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
-		return nil, fmt.Errorf("open target database: %w", err)
+		return nil, fmt.Errorf("%w: open target database", ErrConnectFailed)
 	}
 
 	db.SetMaxOpenConns(10)
 	db.SetMaxIdleConns(5)
 	db.SetConnMaxLifetime(30 * time.Minute)
 
-	if err := db.PingContext(ctx); err != nil {
-		db.Close()
-		return nil, fmt.Errorf("ping target database: %w", err)
-	}
+	pingCtx, cancel := context.WithTimeout(ctx, connectTimeout)
+	defer cancel()
 
+	if err := db.PingContext(pingCtx); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("%w: ping target database", ErrConnectFailed)
+	}
 	return db, nil
 }

@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"errors"
 	"os"
 	"testing"
 	"time"
@@ -92,8 +93,8 @@ func TestRegistryGetUnregisteredID(t *testing.T) {
 	registry := NewRegistry()
 
 	_, err := registry.Get(999)
-	if err == nil {
-		t.Fatal("expected error for unregistered database ID")
+	if !errors.Is(err, ErrNotRegistered) {
+		t.Fatalf("expected ErrNotRegistered, got %v", err)
 	}
 }
 
@@ -165,7 +166,6 @@ func TestRegistryRejectsInvalidIDAndDSN(t *testing.T) {
 	if err := registry.Connect(ctx, 0, "some-dsn"); err == nil {
 		t.Error("expected error for database ID 0")
 	}
-
 	if err := registry.Connect(ctx, -1, "some-dsn"); err == nil {
 		t.Error("expected error for negative database ID")
 	}
@@ -180,5 +180,22 @@ func TestRegistryRejectsInvalidIDAndDSN(t *testing.T) {
 
 	if err := registry.Close(0); err == nil {
 		t.Error("expected error when closing database ID 0")
+	}
+}
+
+func TestRegistryErrors(t *testing.T) {
+	registry := NewRegistry()
+
+	if _, err := registry.Get(1); !errors.Is(err, ErrNotRegistered) {
+		t.Errorf("Get unknown: got %v", err)
+	}
+	if _, err := registry.Get(0); !errors.Is(err, ErrInvalidArgument) {
+		t.Errorf("Get 0: got %v", err)
+	}
+	if err := registry.Close(1); !errors.Is(err, ErrNotRegistered) {
+		t.Errorf("Close unknown: got %v", err)
+	}
+	if err := registry.Connect(context.Background(), 1, ""); !errors.Is(err, ErrInvalidArgument) {
+		t.Errorf("Connect empty DSN: got %v", err)
 	}
 }

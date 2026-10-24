@@ -26,17 +26,17 @@ func (r *Registry) Connect(ctx context.Context, databaseID int64, dsn string) er
 		return fmt.Errorf("database registry is nil")
 	}
 	if databaseID <= 0 {
-		return fmt.Errorf("database ID must be positive")
+		return fmt.Errorf("%w: database ID must be positive", ErrInvalidArgument)
 	}
 	if dsn == "" {
-		return fmt.Errorf("target database DSN is empty")
+		return fmt.Errorf("%w: target database DSN is empty", ErrInvalidArgument)
 	}
 
 	r.mu.RLock()
 	_, exists := r.connections[databaseID]
 	r.mu.RUnlock()
 	if exists {
-		return fmt.Errorf("database connection %d is already registered", databaseID)
+		return fmt.Errorf("%w: id %d", ErrAlreadyRegistered, databaseID)
 	}
 
 	db, err := OpenTarget(ctx, dsn)
@@ -51,7 +51,7 @@ func (r *Registry) Connect(ctx context.Context, databaseID int64, dsn string) er
 
 	if _, exists := r.connections[databaseID]; exists {
 		db.Close()
-		return fmt.Errorf("database connection %d is already registered", databaseID)
+		return fmt.Errorf("%w: id %d", ErrAlreadyRegistered, databaseID)
 	}
 
 	r.connections[databaseID] = db
@@ -64,7 +64,7 @@ func (r *Registry) Get(databaseID int64) (*sql.DB, error) {
 		return nil, fmt.Errorf("database registry is nil")
 	}
 	if databaseID <= 0 {
-		return nil, fmt.Errorf("database ID must be positive")
+		return nil, fmt.Errorf("%w: database ID must be positive", ErrInvalidArgument)
 	}
 
 	r.mu.RLock()
@@ -72,10 +72,7 @@ func (r *Registry) Get(databaseID int64) (*sql.DB, error) {
 
 	db, exists := r.connections[databaseID]
 	if !exists {
-		return nil, fmt.Errorf(
-			"database connection %d is not registered",
-			databaseID,
-		)
+		return nil, fmt.Errorf("%w: id %d", ErrNotRegistered, databaseID)
 	}
 
 	return db, nil
@@ -87,7 +84,7 @@ func (r *Registry) Close(databaseID int64) error {
 		return fmt.Errorf("database registry is nil")
 	}
 	if databaseID <= 0 {
-		return fmt.Errorf("database ID must be positive")
+		return fmt.Errorf("%w: database ID must be positive", ErrInvalidArgument)
 	}
 
 	r.mu.Lock()
@@ -98,10 +95,7 @@ func (r *Registry) Close(databaseID int64) error {
 	r.mu.Unlock()
 
 	if !exists {
-		return fmt.Errorf(
-			"database connection %d is not registered",
-			databaseID,
-		)
+		return fmt.Errorf("%w: id %d", ErrNotRegistered, databaseID)
 	}
 
 	if err := db.Close(); err != nil {

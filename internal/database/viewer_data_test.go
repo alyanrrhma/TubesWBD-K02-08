@@ -1,7 +1,8 @@
-//Test baca file dengan pagination, termasuk table kosong dan nilai NULL
+// Test baca file dengan pagination, termasuk table kosong dan nilai NULL
 package database
 
 import (
+	"errors"
 	"testing"
 )
 
@@ -67,6 +68,8 @@ func TestReadTableDataRejectsInvalidPagination(t *testing.T) {
 			)
 			if err == nil {
 				t.Error("expected an error for invalid pagination")
+			} else if !errors.Is(err, ErrInvalidArgument) {
+				t.Errorf("expected ErrInvalidArgument, got %v", err)
 			}
 		})
 	}

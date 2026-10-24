@@ -3,9 +3,28 @@ package database
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
+	"time"
+	"github.com/jackc/pgx/v5/pgconn"
 )
+
+const queryTimeout = 15 * time.Second
+
+// wrapQueryError menerjemahkan error PostgreSQL yang penting menjadi sentinel.
+func wrapQueryError(op string, err error) error {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		switch pgErr.Code {
+		case "42501": // insufficient_privilege
+			return fmt.Errorf("%w: %s", ErrTargetPermissionDenied, op)
+		case "42P01": // undefined_table
+			return fmt.Errorf("%w: %s", ErrTableNotFound, op)
+		}
+	}
+	return fmt.Errorf("%s: %w", op, err)
+}
 
 type Table struct {
 	Schema string `json:"schema"`
@@ -45,7 +64,7 @@ func ListTables(ctx context.Context, db *sql.DB, schema string) ([]Table, error)
 		return nil, fmt.Errorf("database connection is nil")
 	}
 	if schema == "" {
-		return nil, fmt.Errorf("schema must not be empty")
+		return nil, fmt.Errorf("%w: schema must not be empty", ErrInvalidArgument)
 	}
 
 	rows, err := db.QueryContext(ctx, `
@@ -83,7 +102,7 @@ func ListColumns(ctx context.Context, db *sql.DB, schema string, table string) (
 		return nil, fmt.Errorf("database connection is nil")
 	}
 	if schema == "" || table == "" {
-		return nil, fmt.Errorf("schema and table must not be empty")
+		return nil, fmt.Errorf("%w: schema and table must not be empty", ErrInvalidArgument)
 	}
 
 	rows, err := db.QueryContext(ctx, `
@@ -174,7 +193,7 @@ func ListConstraints(ctx context.Context, db *sql.DB, schema string, table strin
 		return nil, fmt.Errorf("database connection is nil")
 	}
 	if schema == "" || table == "" {
-		return nil, fmt.Errorf("schema and table must not be empty")
+		return nil, fmt.Errorf("%w: schema and table must not be empty", ErrInvalidArgument)
 	}
 
 	const query = `
@@ -228,7 +247,7 @@ func ListIndexes(ctx context.Context, db *sql.DB, schema string, table string) (
 		return nil, fmt.Errorf("database connection is nil")
 	}
 	if schema == "" || table == "" {
-		return nil, fmt.Errorf("schema and table must not be empty")
+		return nil, fmt.Errorf("%w: schema and table must not be empty", ErrInvalidArgument)
 	}
 
 	rows, err := db.QueryContext(ctx, `
@@ -281,14 +300,17 @@ func ReadTableData(ctx context.Context, db *sql.DB, schema string, table string,
 		return TableData{}, fmt.Errorf("database connection is nil")
 	}
 	if schema == "" || table == "" {
-		return TableData{}, fmt.Errorf("schema and table must not be empty")
+		return TableData{}, fmt.Errorf("%w: schema and table must not be empty", ErrInvalidArgument)
 	}
 	if page < 1 {
-		return TableData{}, fmt.Errorf("page must be at least 1")
+		return TableData{}, fmt.Errorf("%w: page must be at least 1", ErrInvalidArgument)
 	}
 	if pageSize < 1 || pageSize > 100 {
-		return TableData{}, fmt.Errorf("page size must be between 1 and 100")
+		return TableData{}, fmt.Errorf("%w: page size must be between 1 and 100", ErrInvalidArgument)
 	}
+
+	ctx, cancel := context.WithTimeout(ctx, queryTimeout)
+	defer cancel()
 
 	// Memastikan tabel tersedia dan memperoleh daftar kolomnya.
 	metadata, err := ListColumns(ctx, db, schema, table)
@@ -296,10 +318,7 @@ func ReadTableData(ctx context.Context, db *sql.DB, schema string, table string,
 		return TableData{}, err
 	}
 	if len(metadata) == 0 {
-		return TableData{}, fmt.Errorf(
-			"table %q.%q does not exist or has no visible columns",
-			schema, table,
-		)
+		return TableData{}, fmt.Errorf("%w: %q.%q", ErrTableNotFound, schema, table)
 	}
 
 	result := TableData{
@@ -315,14 +334,23 @@ func ReadTableData(ctx context.Context, db *sql.DB, schema string, table string,
 
 	qualifiedTable := quoteIdentifier(schema) + "." + quoteIdentifier(table)
 
+	tx, err := db.BeginTx(ctx, &sql.TxOptions{
+		Isolation: sql.LevelRepeatableRead,
+		ReadOnly:  true,
+	})
+	if err != nil {
+		return TableData{}, wrapQueryError("begin read-only transaction", err)
+	}
+	defer tx.Rollback()
+
 	// Menghitung total baris untuk informasi pagination.
 	countQuery := "SELECT COUNT(*) FROM " + qualifiedTable
-	if err := db.QueryRowContext(ctx, countQuery).Scan(&result.TotalRows); err != nil {
-		return TableData{}, fmt.Errorf("count table rows: %w", err)
+	if err := tx.QueryRowContext(ctx, countQuery).Scan(&result.TotalRows); err != nil {
+		return TableData{}, wrapQueryError("count table rows", err)
 	}
 
 	// Mengambil kolom primary key untuk menentukan urutan baris.
-	primaryKeys, err := primaryKeyColumns(ctx, db, schema, table)
+	primaryKeys, err := primaryKeyColumns(ctx, tx, schema, table)
 	if err != nil {
 		return TableData{}, err
 	}
@@ -347,9 +375,9 @@ func ReadTableData(ctx context.Context, db *sql.DB, schema string, table string,
 	offset := (page - 1) * pageSize
 	query += " LIMIT $1 OFFSET $2"
 
-	rows, err := db.QueryContext(ctx, query, pageSize, offset)
+	rows, err := tx.QueryContext(ctx, query, pageSize, offset)
 	if err != nil {
-		return TableData{}, fmt.Errorf("read table data: %w", err)
+		return TableData{}, wrapQueryError("read table data", err)
 	}
 	defer rows.Close()
 
@@ -369,7 +397,7 @@ func ReadTableData(ctx context.Context, db *sql.DB, schema string, table string,
 	}
 
 	if err := rows.Err(); err != nil {
-		return TableData{}, fmt.Errorf("iterate table data: %w", err)
+		return TableData{}, wrapQueryError("iterate table data", err)
 	}
 
 	return result, nil
@@ -381,7 +409,7 @@ func quoteIdentifier(name string) string {
 }
 
 // Menggunakan katalog PostgreSQL untuk mendapatkan kolom primary key, termasuk jika primary key terdiri dari beberapa kolom.
-func primaryKeyColumns(ctx context.Context, db *sql.DB, schema string, table string) ([]string, error) {
+func primaryKeyColumns(ctx context.Context, tx *sql.Tx, schema string, table string) ([]string, error) {
 	const query = `
         SELECT a.attname
         FROM pg_catalog.pg_index i
@@ -401,9 +429,9 @@ func primaryKeyColumns(ctx context.Context, db *sql.DB, schema string, table str
         ORDER BY k.ord
     `
 
-	rows, err := db.QueryContext(ctx, query, schema, table)
+	rows, err := tx.QueryContext(ctx, query, schema, table)
 	if err != nil {
-		return nil, fmt.Errorf("find primary key columns: %w", err)
+		return nil, wrapQueryError("find primary key columns", err)
 	}
 	defer rows.Close()
 
@@ -418,7 +446,7 @@ func primaryKeyColumns(ctx context.Context, db *sql.DB, schema string, table str
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate primary key columns: %w", err)
+		return nil, wrapQueryError("find primary key columns", err)
 	}
 
 	return columns, nil
