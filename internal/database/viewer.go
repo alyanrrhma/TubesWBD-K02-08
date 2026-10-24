@@ -21,15 +21,15 @@ type Schema struct {
 	Name string `json:"name"`
 }
 type Constraint struct {
-	Name                string `json:"name"`
-	Type                string `json:"type"`
+	Name       string `json:"name"`
+	Type       string `json:"type"`
 	Definition string `json:"definition"`
 }
 type Index struct {
-	Name      string `json:"name"`
+	Name       string `json:"name"`
 	Definition string `json:"definition"`
-	IsUnique  bool   `json:"is_unique"`
-	IsPrimary bool   `json:"is_primary"`
+	IsUnique   bool   `json:"is_unique"`
+	IsPrimary  bool   `json:"is_primary"`
 }
 type TableData struct {
 	Columns   []string `json:"columns"`
@@ -127,6 +127,7 @@ func ListColumns(ctx context.Context, db *sql.DB, schema string, table string) (
 
 	return columns, nil
 }
+
 // ListSchemas mengambil daftar schema yang dapat diakses
 // pada database target.
 func ListSchemas(ctx context.Context, db *sql.DB) ([]Schema, error) {
@@ -169,14 +170,14 @@ func ListSchemas(ctx context.Context, db *sql.DB) ([]Schema, error) {
 
 // ListConstraints mengambil constraint dari tabel tertentu.
 func ListConstraints(ctx context.Context, db *sql.DB, schema string, table string) ([]Constraint, error) {
-    if db == nil {
-        return nil, fmt.Errorf("database connection is nil")
-    }
-    if schema == "" || table == "" {
-        return nil, fmt.Errorf("schema and table must not be empty")
-    }
+	if db == nil {
+		return nil, fmt.Errorf("database connection is nil")
+	}
+	if schema == "" || table == "" {
+		return nil, fmt.Errorf("schema and table must not be empty")
+	}
 
-    const query = `
+	const query = `
         SELECT
             c.conname,
             CASE c.contype
@@ -198,27 +199,27 @@ func ListConstraints(ctx context.Context, db *sql.DB, schema string, table strin
         ORDER BY c.conname
     `
 
-    rows, err := db.QueryContext(ctx, query, schema, table)
-    if err != nil {
-        return nil, fmt.Errorf("list table constraints: %w", err)
-    }
-    defer rows.Close()
+	rows, err := db.QueryContext(ctx, query, schema, table)
+	if err != nil {
+		return nil, fmt.Errorf("list table constraints: %w", err)
+	}
+	defer rows.Close()
 
-    constraints := make([]Constraint, 0)
+	constraints := make([]Constraint, 0)
 
-    for rows.Next() {
-        var c Constraint
-        if err := rows.Scan(&c.Name, &c.Type, &c.Definition); err != nil {
-            return nil, fmt.Errorf("scan table constraint: %w", err)
-        }
-        constraints = append(constraints, c)
-    }
+	for rows.Next() {
+		var c Constraint
+		if err := rows.Scan(&c.Name, &c.Type, &c.Definition); err != nil {
+			return nil, fmt.Errorf("scan table constraint: %w", err)
+		}
+		constraints = append(constraints, c)
+	}
 
-    if err := rows.Err(); err != nil {
-        return nil, fmt.Errorf("iterate table constraints: %w", err)
-    }
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate table constraints: %w", err)
+	}
 
-    return constraints, nil
+	return constraints, nil
 }
 
 // ListIndexes mengambil index dari tabel tertentu.
@@ -320,52 +321,27 @@ func ReadTableData(ctx context.Context, db *sql.DB, schema string, table string,
 		return TableData{}, fmt.Errorf("count table rows: %w", err)
 	}
 
-	// Mengambil kolom primary key agar urutan halaman stabil
-	// untuk tabel yang memiliki primary key.
-	pkRows, err := db.QueryContext(ctx, `
-		SELECT kcu.column_name
-		FROM information_schema.table_constraints tc
-		JOIN information_schema.key_column_usage kcu
-			ON tc.constraint_catalog = kcu.constraint_catalog
-			AND tc.constraint_schema = kcu.constraint_schema
-			AND tc.constraint_name = kcu.constraint_name
-			AND tc.table_schema = kcu.table_schema
-			AND tc.table_name = kcu.table_name
-		WHERE tc.constraint_type = 'PRIMARY KEY'
-			AND tc.table_schema = $1
-			AND tc.table_name = $2
-		ORDER BY kcu.ordinal_position
-	`, schema, table)
+	// Mengambil kolom primary key untuk menentukan urutan baris.
+	primaryKeys, err := primaryKeyColumns(ctx, db, schema, table)
 	if err != nil {
-		return TableData{}, fmt.Errorf("find primary key: %w", err)
-	}
-
-	var primaryKeys []string
-	for pkRows.Next() {
-		var name string
-		if err := pkRows.Scan(&name); err != nil {
-			pkRows.Close()
-			return TableData{}, fmt.Errorf("scan primary key: %w", err)
-		}
-		primaryKeys = append(primaryKeys, name)
-	}
-	if err := pkRows.Err(); err != nil {
-		pkRows.Close()
-		return TableData{}, fmt.Errorf("iterate primary keys: %w", err)
-	}
-	if err := pkRows.Close(); err != nil {
-		return TableData{}, fmt.Errorf("close primary key rows: %w", err)
+		return TableData{}, err
 	}
 
 	query := "SELECT * FROM " + qualifiedTable
+
 	if len(primaryKeys) > 0 {
-		query += " ORDER BY "
-		for i, name := range primaryKeys {
-			if i > 0 {
-				query += ", "
-			}
-			query += quoteIdentifier(name)
+		// Jika ada primary key, gunakan sebagai urutan baris.
+		orderColumns := make([]string, 0, len(primaryKeys))
+
+		for _, name := range primaryKeys {
+			orderColumns = append(orderColumns, quoteIdentifier(name))
 		}
+
+		query += " ORDER BY " + strings.Join(orderColumns, ", ")
+	} else {
+		// Jika tidak ada primary key, ctid menjadi urutan sementara.
+		// ctid bukan identitas permanen dan bisa berubah.
+		query += " ORDER BY ctid"
 	}
 
 	offset := (page - 1) * pageSize
@@ -402,4 +378,48 @@ func ReadTableData(ctx context.Context, db *sql.DB, schema string, table string,
 // quoteIdentifier mengamankan nama schema, tabel, dan kolom yang digunakan sebagai identifier SQL PostgreSQL.
 func quoteIdentifier(name string) string {
 	return `"` + strings.ReplaceAll(name, `"`, `""`) + `"`
+}
+
+// Menggunakan katalog PostgreSQL untuk mendapatkan kolom primary key, termasuk jika primary key terdiri dari beberapa kolom.
+func primaryKeyColumns(ctx context.Context, db *sql.DB, schema string, table string) ([]string, error) {
+	const query = `
+        SELECT a.attname
+        FROM pg_catalog.pg_index i
+        JOIN pg_catalog.pg_class t
+            ON t.oid = i.indrelid
+        JOIN pg_catalog.pg_namespace n
+            ON n.oid = t.relnamespace
+        JOIN LATERAL
+            unnest(i.indkey) WITH ORDINALITY AS k(attnum, ord)
+            ON true
+        JOIN pg_catalog.pg_attribute a
+            ON a.attrelid = t.oid
+           AND a.attnum = k.attnum
+        WHERE i.indisprimary
+          AND n.nspname = $1
+          AND t.relname = $2
+        ORDER BY k.ord
+    `
+
+	rows, err := db.QueryContext(ctx, query, schema, table)
+	if err != nil {
+		return nil, fmt.Errorf("find primary key columns: %w", err)
+	}
+	defer rows.Close()
+
+	columns := make([]string, 0)
+
+	for rows.Next() {
+		var column string
+		if err := rows.Scan(&column); err != nil {
+			return nil, fmt.Errorf("scan primary key column: %w", err)
+		}
+		columns = append(columns, column)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate primary key columns: %w", err)
+	}
+
+	return columns, nil
 }
