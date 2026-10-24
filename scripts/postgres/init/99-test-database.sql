@@ -1,0 +1,2 @@
+CREATE DATABASE dbmp_platform_test;
+CREATE DATABASE dbmp_target_test;
