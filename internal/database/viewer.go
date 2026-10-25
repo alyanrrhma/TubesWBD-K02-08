@@ -8,9 +8,27 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
-const queryTimeout = 15 * time.Second
+const (
+	queryTimeout       = 15 * time.Second
+	maxIdentifierBytes = 63
+)
+
+func validateIdentifier(kind, s string) error {
+	switch {
+	case s == "":
+		return fmt.Errorf("%w: %s must not be empty", ErrInvalidArgument, kind)
+	case len(s) > maxIdentifierBytes:
+		return fmt.Errorf("%w: %s is longer than %d bytes", ErrInvalidArgument, kind, maxIdentifierBytes)
+	case strings.ContainsRune(s, 0):
+		return fmt.Errorf("%w: %s contains a NUL character", ErrInvalidArgument, kind)
+	case !utf8.ValidString(s):
+		return fmt.Errorf("%w: %s is not valid UTF-8", ErrInvalidArgument, kind)
+	}
+	return nil
+}
 
 // wrapQueryError menerjemahkan error PostgreSQL yang penting menjadi sentinel.
 func wrapQueryError(op string, err error) error {
@@ -70,8 +88,8 @@ func ListTables(ctx context.Context, db *sql.DB, schema string) ([]Table, error)
 	if db == nil {
 		return nil, fmt.Errorf("database connection is nil")
 	}
-	if schema == "" {
-		return nil, fmt.Errorf("%w: schema must not be empty", ErrInvalidArgument)
+	if err := validateIdentifier("schema", schema); err != nil {
+		return nil, err
 	}
 
 	rows, err := db.QueryContext(ctx, `
@@ -108,8 +126,11 @@ func ListColumns(ctx context.Context, db *sql.DB, schema string, table string) (
 	if db == nil {
 		return nil, fmt.Errorf("database connection is nil")
 	}
-	if schema == "" || table == "" {
-		return nil, fmt.Errorf("%w: schema and table must not be empty", ErrInvalidArgument)
+	if err := validateIdentifier("schema", schema); err != nil {
+		return nil, err
+	}
+	if err := validateIdentifier("table", table); err != nil {
+		return nil, err
 	}
 
 	rows, err := db.QueryContext(ctx, `
@@ -199,8 +220,11 @@ func ListConstraints(ctx context.Context, db *sql.DB, schema string, table strin
 	if db == nil {
 		return nil, fmt.Errorf("database connection is nil")
 	}
-	if schema == "" || table == "" {
-		return nil, fmt.Errorf("%w: schema and table must not be empty", ErrInvalidArgument)
+	if err := validateIdentifier("schema", schema); err != nil {
+		return nil, err
+	}
+	if err := validateIdentifier("table", table); err != nil {
+		return nil, err
 	}
 
 	const query = `
@@ -253,8 +277,11 @@ func ListIndexes(ctx context.Context, db *sql.DB, schema string, table string) (
 	if db == nil {
 		return nil, fmt.Errorf("database connection is nil")
 	}
-	if schema == "" || table == "" {
-		return nil, fmt.Errorf("%w: schema and table must not be empty", ErrInvalidArgument)
+	if err := validateIdentifier("schema", schema); err != nil {
+		return nil, err
+	}
+	if err := validateIdentifier("table", table); err != nil {
+		return nil, err
 	}
 
 	rows, err := db.QueryContext(ctx, `
@@ -306,8 +333,11 @@ func ReadTableData(ctx context.Context, db *sql.DB, schema string, table string,
 	if db == nil {
 		return TableData{}, fmt.Errorf("database connection is nil")
 	}
-	if schema == "" || table == "" {
-		return TableData{}, fmt.Errorf("%w: schema and table must not be empty", ErrInvalidArgument)
+	if err := validateIdentifier("schema", schema); err != nil {
+		return TableData{}, err
+	}
+	if err := validateIdentifier("table", table); err != nil {
+		return TableData{}, err
 	}
 	if page < 1 {
 		return TableData{}, fmt.Errorf("%w: page must be at least 1", ErrInvalidArgument)
