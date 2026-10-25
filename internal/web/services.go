@@ -7,6 +7,7 @@ import (
 	"github.com/alyanrrhma/TubesWBD-K02-08/internal/access"
 	"github.com/alyanrrhma/TubesWBD-K02-08/internal/admin"
 	"github.com/alyanrrhma/TubesWBD-K02-08/internal/database"
+	"github.com/alyanrrhma/TubesWBD-K02-08/internal/migration"
 )
 
 // AdminService dipenuhi *admin.Service. Interface ada agar handler dapat diuji tanpa database
@@ -29,6 +30,7 @@ type AdminService interface {
 
 	ListConnections(ctx context.Context) ([]admin.Connection, error)
 	CreateConnection(ctx context.Context, in admin.ConnectionInput) (*admin.Connection, error)
+	UpdateConnection(ctx context.Context, id int64, in admin.ConnectionInput) (*admin.Connection, error)
 	DeleteConnection(ctx context.Context, id int64) error
 	TestConnection(ctx context.Context, id int64) error
 }
@@ -95,5 +97,8 @@ type MigrationRecord struct {
 type Migrations interface {
 	History(ctx context.Context, userID, databaseID int64, page, pageSize int) ([]MigrationRecord, int, error)
 	Detail(ctx context.Context, userID, databaseID, version int64) (*MigrationRecord, error)
+	Explain(ctx context.Context, userID, databaseID int64, sql string, analyze bool) (string, error)
+	DiffSchema(ctx context.Context, userID, databaseID int64, desiredJSON string) (migration.SchemaDiffResult, error)
+	CurrentSchema(ctx context.Context, userID, databaseID int64, schema string) (string, error)
 	Execute(ctx context.Context, userID, databaseID int64, sql string) (*MigrationRecord, error)
 }

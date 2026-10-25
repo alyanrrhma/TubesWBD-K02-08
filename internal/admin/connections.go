@@ -165,6 +165,70 @@ func (s *Service) CreateConnection(ctx context.Context, in ConnectionInput) (*Co
 	return s.GetConnection(ctx, id)
 }
 
+// UpdateConnection checks replacement credentials before storing them. If
+// Password is empty, it preserves the prior password when that ciphertext is readable.
+func (s *Service) UpdateConnection(ctx context.Context, id int64, in ConnectionInput) (*Connection, error) {
+	if id <= 0 {
+		return nil, ErrNotFound
+	}
+	if in.Password == "" {
+		var encrypted []byte
+		if err := s.db.QueryRowContext(ctx, `SELECT password_encrypted FROM database_connections WHERE id=$1`, id).Scan(&encrypted); errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		} else if err != nil {
+			return nil, err
+		}
+		plain, err := s.box.open(encrypted)
+		if err != nil {
+			return nil, err
+		}
+		in.Password = string(plain)
+	}
+	if err := in.normalize(); err != nil {
+		return nil, err
+	}
+	passwordEncrypted, err := s.box.seal([]byte(in.Password))
+	if err != nil {
+		return nil, err
+	}
+	dsn := BuildDSN(in.Host, in.Port, in.Database, in.Username, in.Password, in.SSLMode)
+	tested, err := database.OpenTarget(ctx, dsn)
+	if err != nil {
+		return nil, inputErr("Tidak dapat terhubung ke database target. Periksa host, port, nama database, dan kredensial.")
+	}
+	transferred := false
+	defer func() {
+		if !transferred {
+			_ = tested.Close()
+		}
+	}()
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	_, err = tx.ExecContext(ctx, `UPDATE database_connections
+		SET name=$2, host=$3, port=$4, database_name=$5, username=$6, ssl_mode=$7, password_encrypted=$8
+		WHERE id=$1`, id, in.Name, in.Host, in.Port, in.Database, in.Username, in.SSLMode, passwordEncrypted)
+	if pgCode(err) == pgUniqueViolation {
+		return nil, inputErr("Nama koneksi sudah dipakai.")
+	}
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	if s.registry != nil {
+		if err := s.registry.ReplaceDB(id, tested); err != nil {
+			return nil, err
+		}
+		transferred = true
+	}
+	return s.GetConnection(ctx, id)
+}
+
 func (s *Service) DeleteConnection(ctx context.Context, id int64) error {
 	res, err := s.db.ExecContext(ctx, `DELETE FROM database_connections WHERE id = $1`, id)
 	if err != nil {

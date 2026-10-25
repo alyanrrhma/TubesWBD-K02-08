@@ -8,6 +8,7 @@
 <nav class="tabs" aria-label="Bagian database">
   <a href="/databases/{{.DB.ID}}">Schema dan tabel</a>
   <a href="/databases/{{.DB.ID}}/migrations" aria-current="page">Migration</a>
+  <a href="/databases/{{.DB.ID}}/schema-diff">Schema diff</a>
 </nav>
 
   {{if canEdit .DB.Level}}
@@ -19,9 +20,25 @@
       <label>SQL
         <textarea name="sql" class="sql" rows="9" spellcheck="false" placeholder="ALTER TABLE customers ADD COLUMN phone TEXT;" required>{{.Draft}}</textarea>
       </label>
-      <p class="muted">Dijalankan dalam satu transaksi: di-commit jika berhasil, di-rollback jika gagal. Hasilnya tercatat di riwayat.</p>
-      <div><button class="btn" type="submit" data-confirm="Jalankan migration ini pada {{.DB.Name}}?">Jalankan migration</button></div>
+      <p class="muted">EXPLAIN menampilkan estimasi tanpa menjalankan query. EXPLAIN ANALYZE benar-benar menjalankan statement untuk mengukur row dan waktu aktual, lalu me-rollback transaksi dengan batas waktu 15 detik. Efek non-transaksional (misalnya sequence atau efek eksternal dari fungsi) mungkin tidak dapat dibatalkan; gunakan hanya pada query yang aman.</p>
+      <div class="actions">
+        <button class="btn btn-secondary" type="submit" name="mode" value="explain" formaction="/databases/{{.DB.ID}}/migrations/explain">Analisis execution plan</button>
+        <button class="btn btn-secondary" type="submit" name="mode" value="analyze" formaction="/databases/{{.DB.ID}}/migrations/explain" data-confirm="EXPLAIN ANALYZE benar-benar menjalankan statement. Perubahan transaksional akan di-rollback, tetapi sequence atau efek eksternal mungkin tetap terjadi. Lanjutkan hanya untuk query yang aman.">Jalankan EXPLAIN ANALYZE</button>
+        <button class="btn" type="submit" data-confirm="Jalankan migration ini pada {{.DB.Name}}?">Jalankan migration</button>
+      </div>
     </form>
+    {{if .Plan}}
+    <section aria-labelledby="plan-title">
+      {{if .Analyzed}}
+      <h3 id="plan-title">Actual execution plan</h3>
+      <p class="muted">Dihasilkan dengan <code>EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)</code>. Statement dijalankan dalam transaksi yang di-rollback; row dan waktu aktual tersedia di plan.</p>
+      {{else}}
+      <h3 id="plan-title">Estimated execution plan</h3>
+      <p class="muted">Dihasilkan dengan <code>EXPLAIN (FORMAT JSON)</code>. Query tidak dijalankan; waktu dan jumlah row aktual tidak tersedia.</p>
+      {{end}}
+      <pre class="sqlblock">{{.Plan}}</pre>
+    </section>
+    {{end}}
   </section>
   {{else}}
   <div class="notice">

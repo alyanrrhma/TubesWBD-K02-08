@@ -58,6 +58,25 @@ func (r *Registry) Connect(ctx context.Context, databaseID int64, dsn string) er
 	return nil
 }
 
+// ReplaceDB atomically installs a target pool that has already been opened and
+// verified. On success the registry owns the pool and closes the previous one.
+func (r *Registry) ReplaceDB(databaseID int64, db *sql.DB) error {
+	if r == nil {
+		return fmt.Errorf("database registry is nil")
+	}
+	if databaseID <= 0 || db == nil {
+		return fmt.Errorf("%w: invalid database connection", ErrInvalidArgument)
+	}
+	r.mu.Lock()
+	previous := r.connections[databaseID]
+	r.connections[databaseID] = db
+	r.mu.Unlock()
+	if previous != nil {
+		_ = previous.Close()
+	}
+	return nil
+}
+
 // Get mengambil koneksi aktif berdasarkan ID database.
 func (r *Registry) Get(databaseID int64) (*sql.DB, error) {
 	if r == nil {

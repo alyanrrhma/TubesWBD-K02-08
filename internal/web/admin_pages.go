@@ -191,21 +191,39 @@ func (s *Server) connectionsPage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) connectionsCreate(w http.ResponseWriter, r *http.Request) {
-	port, err := strconv.Atoi(strings.TrimSpace(r.PostFormValue("port")))
+	in, err := connectionInput(r)
 	if err != nil {
-		s.done(w, r, "/admin/connections", "", badInput("Port harus berupa angka."))
+		s.done(w, r, "/admin/connections", "", err)
 		return
 	}
-	_, err = s.Admin.CreateConnection(r.Context(), admin.ConnectionInput{
-		Name:     r.PostFormValue("name"),
-		Host:     r.PostFormValue("host"),
-		Port:     port,
-		Database: r.PostFormValue("database"),
-		Username: r.PostFormValue("username"),
-		Password: r.PostFormValue("password"),
-		SSLMode:  r.PostFormValue("ssl_mode"),
-	})
+	_, err = s.Admin.CreateConnection(r.Context(), in)
 	s.done(w, r, "/admin/connections", "Koneksi berhasil ditambahkan dan diaktifkan.", err)
+}
+
+func (s *Server) connectionsUpdate(w http.ResponseWriter, r *http.Request) {
+	id, ok := s.pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	in, err := connectionInput(r)
+	if err != nil {
+		s.done(w, r, "/admin/connections", "", err)
+		return
+	}
+	_, err = s.Admin.UpdateConnection(r.Context(), id, in)
+	s.done(w, r, "/admin/connections", "Koneksi berhasil diperbarui dan diuji.", err)
+}
+
+func connectionInput(r *http.Request) (admin.ConnectionInput, error) {
+	port, err := strconv.Atoi(strings.TrimSpace(r.PostFormValue("port")))
+	if err != nil {
+		return admin.ConnectionInput{}, badInput("Port harus berupa angka.")
+	}
+	return admin.ConnectionInput{
+		Name: r.PostFormValue("name"), Host: r.PostFormValue("host"), Port: port,
+		Database: r.PostFormValue("database"), Username: r.PostFormValue("username"),
+		Password: r.PostFormValue("password"), SSLMode: r.PostFormValue("ssl_mode"),
+	}, nil
 }
 
 func (s *Server) connectionsTest(w http.ResponseWriter, r *http.Request) {
