@@ -5,9 +5,9 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/jackc/pgx/v5/pgconn"
 	"strings"
 	"time"
-	"github.com/jackc/pgx/v5/pgconn"
 )
 
 const queryTimeout = 15 * time.Second
@@ -354,6 +354,13 @@ func ReadTableData(ctx context.Context, db *sql.DB, schema string, table string,
 	countQuery := "SELECT COUNT(*) FROM " + qualifiedTable
 	if err := tx.QueryRowContext(ctx, countQuery).Scan(&result.TotalRows); err != nil {
 		return TableData{}, wrapQueryError("count table rows", err)
+	}
+	pages := 1
+	if result.TotalRows > 0 {
+		pages += (result.TotalRows - 1) / pageSize
+	}
+	if page > pages {
+		return result, nil
 	}
 
 	// Mengambil kolom primary key untuk menentukan urutan baris.

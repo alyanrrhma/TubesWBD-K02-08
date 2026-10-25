@@ -231,6 +231,19 @@ func TestReadTableDataBeyondLastPage(t *testing.T) {
 	if result.TotalRows != 2 {
 		t.Errorf("expected total rows 2, got %d", result.TotalRows)
 	}
+
+	result, err = ReadTableData(
+		ctx, db, schema, "items", 999999999, 20,
+	)
+	if err != nil {
+		t.Fatalf("expected a very large page number to return an empty page, got error: %v", err)
+	}
+	if len(result.Rows) != 0 {
+		t.Errorf("expected no rows on a very large page, got %d", len(result.Rows))
+	}
+	if result.TotalRows != 2 {
+		t.Errorf("expected total rows 2 for a very large page, got %d", result.TotalRows)
+	}
 }
 
 func TestReadTableDataPageSizeBoundaries(t *testing.T) {

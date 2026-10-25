@@ -86,6 +86,9 @@ func newEnv(t *testing.T) *env {
 		},
 		rowsFor: func(page int) *web.TableDataView {
 			d := &web.TableDataView{Columns: []string{"id", "email"}, Page: page, PageSize: 50, Total: 120}
+			if page > 3 {
+				return d
+			}
 			start := (page - 1) * 50
 			for i := start; i < start+50 && i < 120; i++ {
 				cell := web.CellView{Text: "u@example.com"}
@@ -514,6 +517,10 @@ func TestTableDataPaginationAndNull(t *testing.T) {
 	resp, _ := e.get(alice, base+"?page=99")
 	if resp.StatusCode != http.StatusSeeOther || resp.Header.Get("Location") != base+"?page=3" {
 		t.Fatalf("di luar jangkauan harus ke halaman terakhir, dapat %d %q", resp.StatusCode, resp.Header.Get("Location"))
+	}
+	resp, _ = e.get(alice, base+"?page=999999999")
+	if resp.StatusCode != http.StatusSeeOther || resp.Header.Get("Location") != base+"?page=3" {
+		t.Fatalf("nomor halaman sangat besar harus diarahkan ke halaman terakhir, dapat %d %q", resp.StatusCode, resp.Header.Get("Location"))
 	}
 	if resp, _ := e.get(alice, "/databases/100/tables/public/customers"); resp.StatusCode != http.StatusOK {
 		t.Fatalf("halaman struktur: %d", resp.StatusCode)
