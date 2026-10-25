@@ -200,7 +200,7 @@ func TestGroupMembershipAndEffectiveAccessWithP1(t *testing.T) {
 		}
 	}
 	must(svc.AddMember(ctx, g1.ID, u.ID))
-	must(svc.AddMember(ctx, g1.ID, u.ID)) 
+	must(svc.AddMember(ctx, g1.ID, u.ID))
 	must(svc.AddMember(ctx, g2.ID, u.ID))
 	must(svc.GrantAccess(ctx, g1.ID, dbID, access.ViewOnly))
 	if level() != access.ViewOnly {
@@ -275,9 +275,25 @@ func TestConnectionLifecycleWithRegistry(t *testing.T) {
 	if err := svc.TestConnection(ctx, c.ID); err != nil {
 		t.Fatal(err)
 	}
+	updatedName := in.Name + "-updated"
+	updateInput := in
+	updateInput.Name, updateInput.Password = updatedName, ""
+	updated, err := svc.UpdateConnection(ctx, c.ID, updateInput)
+	if err != nil || updated.Name != updatedName || !updated.Active {
+		t.Fatalf("koneksi harus dapat diperbarui sambil mempertahankan password: %#v %v", updated, err)
+	}
+	badUpdate := updateInput
+	badUpdate.Name, badUpdate.Port = in.Name+"-failed", 1
+	if _, err := svc.UpdateConnection(ctx, c.ID, badUpdate); !errors.As(err, new(*InputError)) {
+		t.Fatalf("update dengan target tidak terjangkau harus ditolak: %v", err)
+	}
+	still, err := svc.GetConnection(ctx, c.ID)
+	if err != nil || still.Name != updatedName {
+		t.Fatalf("data lama harus tetap ada setelah koneksi gagal: %#v %v", still, err)
+	}
 
 	var ie *InputError
-	if _, err := svc.CreateConnection(ctx, in); !errors.As(err, &ie) {
+	if _, err := svc.CreateConnection(ctx, updateInput); !errors.As(err, &ie) {
 		t.Fatalf("nama duplikat harus InputError, dapat %v", err)
 	}
 
@@ -294,9 +310,20 @@ func TestConnectionLifecycleWithRegistry(t *testing.T) {
 	}
 
 	// Kunci yang salah tidak boleh membocorkan apa pun dan hanya menggagalkan koneksi itu.
-	wrong, _ := New(db, database.NewRegistry(), nil, bytes.Repeat([]byte{1}, 32))
+	wrongRegistry := database.NewRegistry()
+	t.Cleanup(func() { wrongRegistry.CloseAll() })
+	wrong, _ := New(db, wrongRegistry, nil, bytes.Repeat([]byte{1}, 32))
 	if err := wrong.TestConnection(ctx, c.ID); err == nil || strings.Contains(err.Error(), pw) {
 		t.Fatalf("kunci salah harus gagal tanpa membocorkan password: %v", err)
+	}
+	// Memasukkan password baru secara eksplisit dapat memperbaiki ciphertext dari kunci lama.
+	repairInput := in
+	repairInput.Name = updatedName
+	if repaired, err := wrong.UpdateConnection(ctx, c.ID, repairInput); err != nil || !repaired.Active {
+		t.Fatalf("password baru harus dapat mengenkripsi ulang koneksi: %#v %v", repaired, err)
+	}
+	if err := wrong.TestConnection(ctx, c.ID); err != nil {
+		t.Fatalf("koneksi harus aktif setelah password dimasukkan ulang: %v", err)
 	}
 
 	if err := svc.DeleteConnection(ctx, c.ID); err != nil {

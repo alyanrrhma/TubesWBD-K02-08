@@ -18,6 +18,27 @@
       </td>
       <td class="actions">
         {{if .Complete}}
+        <details>
+          <summary>Ubah</summary>
+          <form method="post" action="/admin/connections/{{.ID}}" class="stack form-narrow">
+            <p class="muted">Password tidak pernah ditampilkan. Isi password untuk mengganti atau memperbaiki password tersimpan; kosongkan untuk mempertahankan password saat ini.</p>
+            <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+            <label>Nama tampilan <input name="name" value="{{.Name}}" maxlength="64" required></label>
+            <label>Host <input name="host" value="{{.Host}}" spellcheck="false" required></label>
+            <label>Port <input name="port" type="number" min="1" max="65535" value="{{.Port}}" required></label>
+            <label>Nama database <input name="database" value="{{.Database}}" spellcheck="false" required></label>
+            <label>Username <input name="username" value="{{.Username}}" autocomplete="off" spellcheck="false" required></label>
+            <label>Password baru <input name="password" type="password" autocomplete="new-password" placeholder="Kosongkan untuk mempertahankan password"></label>
+            <label>Mode SSL
+              <select name="ssl_mode">
+                <option value="prefer"{{if eq .SSLMode "prefer"}} selected{{end}}>prefer</option>
+                <option value="require"{{if eq .SSLMode "require"}} selected{{end}}>require</option>
+                <option value="disable"{{if eq .SSLMode "disable"}} selected{{end}}>disable</option>
+              </select>
+            </label>
+            <button class="btn" type="submit">Simpan perubahan</button>
+          </form>
+        </details>
         <form method="post" action="/admin/connections/{{.ID}}/test">
           <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
           <button class="btn-quiet" type="submit">Tes koneksi</button>
