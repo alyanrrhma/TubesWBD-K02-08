@@ -168,7 +168,7 @@ Konfigurasi dinyatakan tidak valid bila grace period tidak lebih kecil dari rota
 
 ### Fitur bonus
 
-Fitur bonus pada spesifikasi (DBMS selain PostgreSQL, schema diff dan migration generation, serta analisis query execution plan) **belum diimplementasikan**.
+Schema diff menghasilkan kandidat SQL yang dapat ditinjau sebelum dijalankan. Analisis query menyediakan EXPLAIN estimasi dan EXPLAIN ANALYZE dengan waktu serta row aktual; mode ANALYZE menjalankan statement dalam transaksi yang selalu di-rollback, dengan batas waktu 15 detik. Efek non-transaksional seperti sequence atau efek eksternal dari fungsi mungkin tetap terjadi. Dukungan DBMS selain PostgreSQL belum diimplementasikan.
 
 ---
 
@@ -383,23 +383,25 @@ openssl rand -base64 32
 - Go 1.25 atau lebih baru
 - Docker dan Docker Compose (untuk PostgreSQL pengembangan)
 
-### Langkah
+### Langkah (WSL/Linux)
 
-1. **Salin konfigurasi.**
-
-   ```bash
-   cp .env.example .env
-   ```
-
-   Ubah `BOOTSTRAP_ADMIN_USERNAME` dan `BOOTSTRAP_ADMIN_PASSWORD` sesuai kebutuhan.
-
-2. **Jalankan PostgreSQL.**
+1. **Pastikan Docker Engine, Docker Compose, dan Go tersedia di WSL.** Jalankan perintah berikut dari terminal distro WSL, bukan PowerShell. Jika `.env` belum ada, buat dari contoh; jangan menimpa `.env` yang sudah ada.
 
    ```bash
-   docker compose up -d postgres
+   test -f .env || cp .env.example .env
    ```
 
-   Container `dbmp-postgres` mendengarkan di `127.0.0.1:5433` dan membuat database berikut saat volume pertama kali dibuat:
+   Periksa bahwa `DATABASE_URL` menggunakan port `5433`.
+
+2. **Mulai PostgreSQL dan server dari WSL.** Script ini menunggu PostgreSQL siap sebelum menjalankan aplikasi. Hentikan server dengan `Ctrl+C`.
+
+   ```bash
+   ./scripts/dev-wsl.sh
+   ```
+
+   PostgreSQL hanya dipublikasikan ke loopback (`127.0.0.1:5433`); server web tersedia di `http://localhost:8080`. Untuk menghentikan PostgreSQL setelah keluar dari server, jalankan `docker compose down` dari WSL. `docker compose ps` dan `docker compose logs postgres` membantu memeriksa statusnya.
+
+   Container membuat database berikut saat volume pertama kali dibuat:
 
    | Database | Fungsi |
    | --- | --- |
@@ -407,13 +409,7 @@ openssl rand -base64 32
    | `dbmp_target` | Database target contoh (tabel `customers`, `orders`, dan schema `audit` dengan tabel `audit_log`) |
    | `dbmp_platform_test`, `dbmp_target_test` | Database khusus pengujian |
 
-3. **Jalankan server.**
-
-   ```bash
-   go run ./cmd/server
-   ```
-
-   Buka <http://localhost:8080> dan masuk dengan akun dari `BOOTSTRAP_ADMIN_USERNAME` / `BOOTSTRAP_ADMIN_PASSWORD`. Akun ini hanya dibuat bila belum ada Platform Admin sama sekali.
+3. **Masuk ke aplikasi.** Buka <http://localhost:8080> dan gunakan akun dari `BOOTSTRAP_ADMIN_USERNAME` / `BOOTSTRAP_ADMIN_PASSWORD`. Akun ini hanya dibuat bila belum ada Platform Admin sama sekali.
 
 4. **Daftarkan database target contoh** lewat menu **Koneksi** (`/admin/connections`):
 
@@ -425,6 +421,8 @@ openssl rand -base64 32
    | Username | `dbmp` |
    | Password | `dbmp_dev_password` |
    | Mode SSL | `disable` |
+
+   Status **Aktif** berarti aplikasi berhasil terhubung ke target tersebut. Koneksi target disimpan oleh aplikasi; database `dbmp_target` yang baru dibuat Docker tidak otomatis terdaftar. Jika statusnya tidak aktif setelah server dimulai ulang, periksa host `localhost`, port `5433`, kredensial di atas, lalu gunakan aksi **Tes koneksi** di halaman Koneksi.
 
 5. **Atur akses.** Buat group di menu **Group**, tambahkan anggota, lalu beri group akses *View Only* atau *View + Edit* ke database tersebut. Pengguna yang menjadi anggota group kemudian dapat melihat database di dashboard.
 
