@@ -1,7 +1,6 @@
-# TubesWBD-K02-08
-# TubesWBD-K02-08 — Database Management Platform (DBMP)
+# TubesWBD-K03-08 — Database Management Platform (DBMP)
 
-> Tugas Besar **IF3110 Pengembangan Aplikasi Web 2026 — Milestone 1** (kelompok K02-08).
+> Tugas Besar **IF3110 Pengembangan Aplikasi Web 2026 — Milestone 1** (kelompok K03-08).
 > Fondasi Database Management Platform: pengaturan akses, penjelajahan database, dan pencatatan perubahan schema secara terkontrol.
 
 Aplikasi web untuk mengelola dan menjelajahi banyak database **PostgreSQL** dari satu tempat. Platform Admin mendaftarkan koneksi database target, mengelompokkan pengguna ke dalam *group*, lalu memberi group tersebut akses **View Only** atau **View + Edit** ke database tertentu. Pengguna biasa dapat menjelajahi schema, tabel, struktur, dan isi data, serta (bila punya akses *View + Edit*) menjalankan **migration SQL** yang tercatat riwayatnya.
