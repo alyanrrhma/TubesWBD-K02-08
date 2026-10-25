@@ -1,0 +1,104 @@
+{{define "content"}}
+{{with .Data}}
+<nav class="crumbs" aria-label="Lokasi"><a href="/dashboard">Database</a> / <a href="/databases/{{.DB.ID}}">{{.DB.Name}}</a> / <span>Migration</span></nav>
+<header class="pagehead">
+  <h1>Migration</h1>
+  <span class="level level-{{levelClass .DB.Level}}">{{levelLabel .DB.Level}}</span>
+</header>
+<nav class="tabs" aria-label="Bagian database">
+  <a href="/databases/{{.DB.ID}}">Schema dan tabel</a>
+  <a href="/databases/{{.DB.ID}}/migrations" aria-current="page">Migration</a>
+  <a href="/databases/{{.DB.ID}}/schema-diff">Schema diff</a>
+</nav>
+
+  {{if canEdit .DB.Level}}
+  <section>
+    <h2>Migration baru</h2>
+    {{if .Failure}}<div class="flash flash-error" role="alert">{{.Failure}}</div>{{end}}
+    <form method="post" action="/databases/{{.DB.ID}}/migrations" class="stack">
+      <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+      <label>SQL
+        <textarea name="sql" class="sql" rows="9" spellcheck="false" placeholder="ALTER TABLE customers ADD COLUMN phone TEXT;" required>{{.Draft}}</textarea>
+      </label>
+      <p class="muted">EXPLAIN menampilkan estimasi tanpa menjalankan query. EXPLAIN ANALYZE benar-benar menjalankan statement untuk mengukur row dan waktu aktual, lalu me-rollback transaksi dengan batas waktu 15 detik. Efek non-transaksional (misalnya sequence atau efek eksternal dari fungsi) mungkin tidak dapat dibatalkan; gunakan hanya pada query yang aman.</p>
+      <div class="actions">
+        <button class="btn btn-secondary" type="submit" name="mode" value="explain" formaction="/databases/{{.DB.ID}}/migrations/explain">Analisis execution plan</button>
+        <button class="btn btn-secondary" type="submit" name="mode" value="analyze" formaction="/databases/{{.DB.ID}}/migrations/explain" data-confirm="EXPLAIN ANALYZE benar-benar menjalankan statement. Perubahan transaksional akan di-rollback, tetapi sequence atau efek eksternal mungkin tetap terjadi. Lanjutkan hanya untuk query yang aman.">Jalankan EXPLAIN ANALYZE</button>
+        <button class="btn" type="submit" data-confirm="Jalankan migration ini pada {{.DB.Name}}?">Jalankan migration</button>
+      </div>
+    </form>
+    {{if .Plan}}
+    <section aria-labelledby="plan-title">
+      {{if .Analyzed}}
+      <h3 id="plan-title">Actual execution plan</h3>
+      <p class="muted">Dihasilkan dengan <code>EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)</code>. Statement dijalankan dalam transaksi yang di-rollback; row dan waktu aktual tersedia di plan.</p>
+      {{else}}
+      <h3 id="plan-title">Estimated execution plan</h3>
+      <p class="muted">Dihasilkan dengan <code>EXPLAIN (FORMAT JSON)</code>. Query tidak dijalankan; waktu dan jumlah row aktual tidak tersedia.</p>
+      {{end}}
+      <pre class="sqlblock">{{.Plan}}</pre>
+    </section>
+    {{end}}
+  </section>
+  {{else}}
+  <div class="notice">
+    <strong>Akses View Only.</strong> Anda dapat melihat riwayat migration, tetapi tidak dapat menjalankannya. Minta Platform Admin untuk akses View + Edit bila diperlukan.
+  </div>
+  {{end}}
+
+  <section>
+    <h2>Riwayat</h2>
+    {{if .History}}
+    <div class="scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Versi</th>
+          <th>Status</th>
+          <th>Dijalankan oleh</th>
+          <th>Waktu</th>
+          <th>Detail</th>
+        </tr>
+      </thead>
+      <tbody>
+      {{range .History}}
+        <tr>
+          <td class="mono">
+            {{if .Version}}
+              <a href="/databases/{{$.Data.DB.ID}}/migrations/{{.Version}}">v{{.Version}}</a>
+            {{else}}
+              -
+            {{end}}
+          </td>
+          <td>
+            <span class="status status-{{if eq .Status "SUCCESS"}}ok{{else}}fail{{end}}">
+              {{if eq .Status "SUCCESS"}}Berhasil{{else}}Gagal, di-rollback{{end}}
+            </span>
+          </td>
+          <td>{{.ExecutedBy}}</td>
+          <td>{{fmtTime .ExecutedAt}}</td>
+          <td>
+            {{if .Version}}
+              <a href="/databases/{{$.Data.DB.ID}}/migrations/{{.Version}}">Lihat detail SQL</a>
+            {{else}}
+              -
+            {{end}}
+          </td>
+        </tr>
+      {{end}}
+      </tbody>
+    </table>
+    </div>
+    {{else}}
+    <div class="empty"><p>Belum ada migration pada database ini.</p></div>
+    {{end}}
+    {{if gt .Pages 1}}
+    <nav class="pagination" aria-label="Halaman riwayat migration">
+      {{if gt .Page 1}}<a href="?page={{.Prev}}">Migration lebih baru</a>{{end}}
+      <span>Halaman {{.Page}} dari {{.Pages}}</span>
+      {{if lt .Page .Pages}}<a href="?page={{.Next}}">Migration lebih lama</a>{{end}}
+    </nav>
+    {{end}}
+  </section>
+{{end}}
+{{end}}

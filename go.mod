@@ -1,8 +1,11 @@
-module github.com/kelompok/if3110-tubes
+module github.com/alyanrrhma/TubesWBD-K02-08
 
 go 1.25.0
 
-require github.com/jackc/pgx/v5 v5.11.0
+require (
+	github.com/jackc/pgx/v5 v5.11.0
+	github.com/joho/godotenv v1.5.1
+)
 
 require (
 	github.com/jackc/pgpassfile v1.0.0 // indirect

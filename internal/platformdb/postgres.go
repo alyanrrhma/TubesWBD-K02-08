@@ -1,5 +1,4 @@
-// Koneksi ke database internal
-// untuk kebutuhan internal aplikasi DBMP, seperti menyimpan akun, sesi, konfigurasi koneksi database pengguna, dan riwayat migrasi
+// Koneksi ke database internal untuk kebutuhan internal aplikasi DBMP, seperti menyimpan akun, sesi, konfigurasi koneksi database pengguna, dan riwayat migrasi
 package platformdb
 
 import (

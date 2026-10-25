@@ -15,4 +15,6 @@ var (
 	ErrConnectFailed          = errors.New("cannot connect to target database")
 	ErrTargetPermissionDenied = errors.New("target database denied access")
 	ErrTableNotFound          = errors.New("table not found")
+	ErrQueryTimeout           = errors.New("target database query timed out")
+	ErrWriteRejected          = errors.New("write attempt rejected by read-only viewer")
 )

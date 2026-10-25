@@ -1,0 +1,10 @@
+{{define "content"}}
+{{with .Data}}
+<section class="errorbox">
+  <p class="errcode">{{.Status}}</p>
+  <h1>{{$.Title}}</h1>
+  <p>{{.Message}}</p>
+  <p><a href="{{if $.User}}/dashboard{{else}}/login{{end}}">{{if $.User}}Kembali ke daftar database{{else}}Ke halaman masuk{{end}}</a></p>
+</section>
+{{end}}
+{{end}}

@@ -44,23 +44,38 @@ type Repository interface {
 type Service struct{ Repo Repository }
 
 // EffectiveAccess uses highest grant from any group (documented course-project policy).
-func (s Service) EffectiveAccess(ctx context.Context, userID, databaseID int64) (Level, error) {
+func (s Service) EffectiveAccess(
+	ctx context.Context,
+	userID, databaseID int64,
+) (Level, error) {
 	if userID <= 0 || databaseID <= 0 {
 		return NoAccess, errors.New("invalid id")
 	}
+
+	if s.Repo == nil {
+		return NoAccess, ErrInvalidService
+	}
+
 	grants, e := s.Repo.GrantsForUser(ctx, userID, databaseID)
 	if e != nil {
 		return NoAccess, e
 	}
+
 	level := NoAccess
 	for _, g := range grants {
-		if g.DatabaseID == databaseID && g.Level > level && g.Level <= ViewEdit {
+		if g.DatabaseID == databaseID &&
+			g.Level > level &&
+			g.Level <= ViewEdit {
 			level = g.Level
 		}
 	}
+
 	return level, nil
 }
 func (s Service) Require(ctx context.Context, userID, databaseID int64, needed Level) error {
+	if needed != ViewOnly && needed != ViewEdit {
+		return ErrInvalidLevel
+	}
 	level, e := s.EffectiveAccess(ctx, userID, databaseID)
 	if e != nil {
 		return e
@@ -71,7 +86,11 @@ func (s Service) Require(ctx context.Context, userID, databaseID int64, needed L
 	return nil
 }
 
-var ErrForbidden = errors.New("forbidden")
+var (
+	ErrForbidden      = errors.New("forbidden")
+	ErrInvalidLevel   = errors.New("invalid access level")
+	ErrInvalidService = errors.New("access service is not configured")
+)
 
 type UserIDContextKey struct{}
 
@@ -85,9 +104,15 @@ func WithUserID(ctx context.Context, id int64) context.Context {
 
 // Middleware must wrap every DB viewer and migration route; protects direct HTTP calls.
 func (s Service) Middleware(needed Level, next http.Handler) http.Handler {
+	if needed != ViewOnly && needed != ViewEdit {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			http.Error(w, "invalid access configuration",
+				http.StatusInternalServerError)
+		})
+	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		id, ok := UserID(r.Context())
-		if !ok {
+		if !ok || id <= 0 {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}

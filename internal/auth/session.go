@@ -15,6 +15,7 @@ import (
 var (
 	ErrUnauthenticated = errors.New("unauthenticated")
 	ErrCSRF            = errors.New("invalid csrf token")
+	ErrSessionConflict = errors.New("session changed concurrently")
 )
 
 const CookieName = "dbmp_session"
@@ -52,6 +53,7 @@ type Store interface {
 	Create(context.Context, Session) error
 	FindByTokenHash(context.Context, [32]byte) (Session, error)
 	Save(context.Context, Session) error
+	CompareAndSwap(context.Context, Session, [32]byte) error
 	RevokeFamily(context.Context, string) error
 	RevokeUser(context.Context, int64) error
 }
@@ -80,7 +82,21 @@ func randomToken() (string, error) {
 }
 func digest(token string) [32]byte { return sha256.Sum256([]byte(token)) }
 func (m *Manager) cookie(w http.ResponseWriter, token string, exp time.Time) {
-	http.SetCookie(w, &http.Cookie{Name: CookieName, Value: token, Path: "/", HttpOnly: true, Secure: m.Config.SecureCookies, SameSite: http.SameSiteLaxMode, Expires: exp, MaxAge: int(time.Until(exp).Seconds())})
+	maxAge := int(exp.Sub(m.Now()).Seconds())
+	if maxAge < 0 {
+		maxAge = 0
+	}
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     CookieName,
+		Value:    token,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   m.Config.SecureCookies,
+		SameSite: http.SameSiteLaxMode,
+		Expires:  exp,
+		MaxAge:   maxAge,
+	})
 }
 func (m *Manager) ClearCookie(w http.ResponseWriter) {
 	http.SetCookie(w, &http.Cookie{Name: CookieName, Value: "", Path: "/", HttpOnly: true, Secure: m.Config.SecureCookies, SameSite: http.SameSiteLaxMode, MaxAge: -1})
@@ -122,6 +138,7 @@ func (m *Manager) Validate(ctx context.Context, w http.ResponseWriter, r *http.R
 		return Session{}, "", ErrUnauthenticated
 	}
 	now := m.Now()
+	expectedTokenHash := s.TokenHash
 	if s.Revoked || !now.Before(s.ExpiresAt) || now.Sub(s.LastSeen) >= m.Config.IdleTimeout {
 		_ = m.Store.RevokeFamily(ctx, s.FamilyID)
 		return Session{}, "", ErrUnauthenticated
@@ -146,7 +163,7 @@ func (m *Manager) Validate(ctx context.Context, w http.ResponseWriter, r *http.R
 		m.cookie(w, next, s.ExpiresAt)
 	}
 	s.LastSeen = now
-	if e = m.Store.Save(ctx, s); e != nil {
+	if e = m.Store.CompareAndSwap(ctx, s, expectedTokenHash); e != nil {
 		return Session{}, "", e
 	}
 	return s, "", nil
@@ -164,8 +181,12 @@ func (m *Manager) IssueCSRF(ctx context.Context, s Session) (string, error) {
 	if e != nil {
 		return "", e
 	}
+	expectedTokenHash := s.TokenHash
 	s.CSRFHash = digest(v)
-	return v, m.Store.Save(ctx, s)
+	if err := m.Store.CompareAndSwap(ctx, s, expectedTokenHash); err != nil {
+		return "", err
+	}
+	return v, nil
 }
 func CheckCSRF(s Session, token string) error {
 	if len(token) < 32 || len(token) > 128 {
@@ -191,13 +212,14 @@ func (m *Manager) RotatePrivilege(ctx context.Context, w http.ResponseWriter, s 
 		return "", e
 	}
 	now := m.Now()
+	expectedTokenHash := s.TokenHash
 	s.Principal = p
 	s.OldTokenHash = s.TokenHash
 	s.OldExpiresAt = now.Add(m.Config.GracePeriod)
 	s.TokenHash = digest(tok)
 	s.CSRFHash = digest(csrf)
 	s.RotatedAt = now
-	if e = m.Store.Save(ctx, s); e != nil {
+	if e = m.Store.CompareAndSwap(ctx, s, expectedTokenHash); e != nil {
 		return "", e
 	}
 	m.cookie(w, tok, s.ExpiresAt)

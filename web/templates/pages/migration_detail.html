@@ -1,0 +1,54 @@
+{{define "content"}}
+{{with .Data}}
+<nav class="crumbs" aria-label="Lokasi">
+  <a href="/dashboard">Database</a> /
+  <a href="/databases/{{.DB.ID}}">{{.DB.Name}}</a> /
+  <a href="/databases/{{.DB.ID}}/migrations">Migration</a> /
+  <span>Detail v{{.Record.Version}}</span>
+</nav>
+
+<header class="pagehead">
+  <h1>Detail Migration v{{.Record.Version}}</h1>
+  <span class="level level-{{levelClass .DB.Level}}">{{levelLabel .DB.Level}}</span>
+</header>
+
+<nav class="tabs" aria-label="Bagian database">
+  <a href="/databases/{{.DB.ID}}">Schema dan tabel</a>
+  <a href="/databases/{{.DB.ID}}/migrations">Migration</a>
+</nav>
+
+<section>
+  <h2>Informasi migration</h2>
+  <dl>
+    <dt>Versi</dt>
+    <dd class="mono">v{{.Record.Version}}</dd>
+
+    <dt>Status</dt>
+    <dd>
+      <span class="status status-{{if eq .Record.Status "SUCCESS"}}ok{{else}}fail{{end}}">
+        {{if eq .Record.Status "SUCCESS"}}Berhasil{{else}}Gagal, di-rollback{{end}}
+      </span>
+    </dd>
+
+    <dt>Dijalankan oleh</dt>
+    <dd>{{.Record.ExecutedBy}}</dd>
+
+    <dt>Waktu eksekusi</dt>
+    <dd>{{fmtTime .Record.ExecutedAt}}</dd>
+  </dl>
+</section>
+
+<section>
+  <h2>SQL</h2>
+  <pre class="sqlblock">{{.Record.SQL}}</pre>
+  {{if .Record.ErrorMessage}}
+  <h3>Pesan error</h3>
+  <p class="errtext">{{.Record.ErrorMessage}}</p>
+  {{end}}
+</section>
+
+<p>
+  <a href="/databases/{{.DB.ID}}/migrations">Kembali ke riwayat migration</a>
+</p>
+{{end}}
+{{end}}

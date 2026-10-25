@@ -6,10 +6,37 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgconn"
 )
+
+func TestValidateIdentifier(t *testing.T) {
+	tests := []struct {
+		name    string
+		value   string
+		wantErr bool
+	}{
+		{name: "empty", wantErr: true},
+		{name: "maximum length", value: strings.Repeat("a", maxIdentifierBytes)},
+		{name: "too long", value: strings.Repeat("a", maxIdentifierBytes+1), wantErr: true},
+		{name: "NUL", value: "table\x00name", wantErr: true},
+		{name: "invalid UTF-8", value: string([]byte{0xff}), wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateIdentifier("table", tt.value)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("validateIdentifier() error = %v, wantErr %t", err, tt.wantErr)
+			}
+			if err != nil && !errors.Is(err, ErrInvalidArgument) {
+				t.Errorf("expected ErrInvalidArgument, got %v", err)
+			}
+		})
+	}
+}
 
 func TestViewerValidationErrorsAreSentinels(t *testing.T) {
 	db := &sql.DB{}
@@ -83,6 +110,78 @@ func TestViewerValidationErrorsAreSentinels(t *testing.T) {
 				t.Errorf("expected ErrInvalidArgument, got %v", err)
 			}
 		})
+	}
+}
+
+func TestViewerRejectsInvalidIdentifiers(t *testing.T) {
+	db := &sql.DB{}
+	ctx := context.Background()
+	tooLong := strings.Repeat("a", maxIdentifierBytes+1)
+	invalidUTF8 := string([]byte{0xff})
+	tests := []struct {
+		name string
+		call func(schema, table string) error
+	}{
+		{
+			name: "ListTables",
+			call: func(schema, _ string) error {
+				_, err := ListTables(ctx, db, schema)
+				return err
+			},
+		},
+		{
+			name: "ListColumns",
+			call: func(schema, table string) error {
+				_, err := ListColumns(ctx, db, schema, table)
+				return err
+			},
+		},
+		{
+			name: "ListConstraints",
+			call: func(schema, table string) error {
+				_, err := ListConstraints(ctx, db, schema, table)
+				return err
+			},
+		},
+		{
+			name: "ListIndexes",
+			call: func(schema, table string) error {
+				_, err := ListIndexes(ctx, db, schema, table)
+				return err
+			},
+		},
+		{
+			name: "ReadTableData",
+			call: func(schema, table string) error {
+				_, err := ReadTableData(ctx, db, schema, table, 1, 20)
+				return err
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name+"/overlong schema", func(t *testing.T) {
+			if err := tt.call(tooLong, "items"); !errors.Is(err, ErrInvalidArgument) {
+				t.Errorf("expected ErrInvalidArgument, got %v", err)
+			}
+		})
+		t.Run(tt.name+"/invalid UTF-8 schema", func(t *testing.T) {
+			if err := tt.call(invalidUTF8, "items"); !errors.Is(err, ErrInvalidArgument) {
+				t.Errorf("expected ErrInvalidArgument, got %v", err)
+			}
+		})
+		if tt.name != "ListTables" {
+			t.Run(tt.name+"/NUL table", func(t *testing.T) {
+				if err := tt.call("public", "items\x00"); !errors.Is(err, ErrInvalidArgument) {
+					t.Errorf("expected ErrInvalidArgument, got %v", err)
+				}
+			})
+			t.Run(tt.name+"/invalid UTF-8 table", func(t *testing.T) {
+				if err := tt.call("public", invalidUTF8); !errors.Is(err, ErrInvalidArgument) {
+					t.Errorf("expected ErrInvalidArgument, got %v", err)
+				}
+			})
+		}
 	}
 }
 
@@ -211,9 +310,8 @@ func TestReadTableDataUsesReadOnlyTransaction(t *testing.T) {
 		t.Fatal("expected the write inside the view to be rejected")
 	}
 
-	var pgErr interface{ SQLState() string }
-	if !errors.As(err, &pgErr) || pgErr.SQLState() != "25006" {
-		t.Fatalf("expected read-only transaction error (SQLSTATE 25006), got %v", err)
+	if !errors.Is(err, ErrWriteRejected) {
+		t.Fatalf("expected ErrWriteRejected, got %v", err)
 	}
 }
 
@@ -231,6 +329,19 @@ func TestReadTableDataBeyondLastPage(t *testing.T) {
 	}
 	if result.TotalRows != 2 {
 		t.Errorf("expected total rows 2, got %d", result.TotalRows)
+	}
+
+	result, err = ReadTableData(
+		ctx, db, schema, "items", 999999999, 20,
+	)
+	if err != nil {
+		t.Fatalf("expected a very large page number to return an empty page, got error: %v", err)
+	}
+	if len(result.Rows) != 0 {
+		t.Errorf("expected no rows on a very large page, got %d", len(result.Rows))
+	}
+	if result.TotalRows != 2 {
+		t.Errorf("expected total rows 2 for a very large page, got %d", result.TotalRows)
 	}
 }
 

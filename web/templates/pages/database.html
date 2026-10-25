@@ -1,0 +1,47 @@
+{{define "content"}}
+{{with .Data}}
+<nav class="crumbs" aria-label="Lokasi"><a href="/dashboard">Database</a> / <span>{{.DB.Name}}</span></nav>
+<header class="pagehead">
+  <h1>{{.DB.Name}}</h1>
+  <span class="level level-{{levelClass .DB.Level}}">{{levelLabel .DB.Level}}</span>
+</header>
+<p class="mono muted">{{dbAddr .DB.Host .DB.Port .DB.Database}}</p>
+<nav class="tabs" aria-label="Bagian database">
+  <a href="/databases/{{.DB.ID}}" aria-current="page">Schema dan tabel</a>
+  <a href="/databases/{{.DB.ID}}/migrations">Migration</a>
+  <a href="/databases/{{.DB.ID}}/schema-diff">Schema diff</a>
+</nav>
+
+{{if .Schemas}}
+<div class="split">
+  <nav class="schemalist" aria-label="Schema">
+    <h2>Schema</h2>
+    <ul>
+    {{range .Schemas}}
+      <li><a href="/databases/{{$.Data.DB.ID}}?schema={{.}}"{{if eq . $.Data.Selected}} aria-current="true"{{end}} class="mono">{{.}}</a></li>
+    {{end}}
+    </ul>
+  </nav>
+  <section>
+    <h2>Tabel di <span class="mono">{{.Selected}}</span></h2>
+    {{if .Tables}}
+    <div class="scroll">
+    <table>
+      <thead><tr><th>Nama</th></tr></thead>
+      <tbody>
+      {{range .Tables}}
+        <tr><td><a class="mono" href="/databases/{{$.Data.DB.ID}}/tables/{{pathseg .Schema}}/{{pathseg .Name}}">{{.Name}}</a></td></tr>
+      {{end}}
+      </tbody>
+    </table>
+    </div>
+    {{else}}
+    <div class="empty"><p>Schema <span class="mono">{{.Selected}}</span> belum memiliki tabel.</p></div>
+    {{end}}
+  </section>
+</div>
+{{else}}
+<div class="empty"><p>Database ini belum memiliki schema yang dapat ditampilkan.</p></div>
+{{end}}
+{{end}}
+{{end}}
