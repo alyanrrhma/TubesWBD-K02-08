@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/alyanrrhma/TubesWBD-K02-08/internal/auth"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 type User struct {
@@ -92,12 +93,21 @@ func (s *Service) DeleteUser(ctx context.Context, id int64) error {
 	}
 	res, err := s.db.ExecContext(ctx, `DELETE FROM users WHERE id = $1`, id)
 	if err != nil {
-		return err
+		return userDeleteError(err)
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
 		return ErrNotFound
 	}
 	return nil
+}
+
+func userDeleteError(err error) error {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == pgForeignKeyViolation &&
+		pgErr.ConstraintName == migrationHistoryUserConstraint {
+		return ErrUserHasHistory
+	}
+	return err
 }
 
 // EnsureAdmin membuat Platform Admin pertama bila belum ada satu pun

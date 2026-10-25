@@ -1,6 +1,7 @@
 package web
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -41,7 +42,13 @@ func (s *Server) usersDelete(w http.ResponseWriter, r *http.Request) {
 		s.done(w, r, "/admin/users", "", badInput("Anda tidak dapat menghapus akun yang sedang dipakai."))
 		return
 	}
-	s.done(w, r, "/admin/users", "Pengguna dihapus.", s.Admin.DeleteUser(r.Context(), id))
+	err := s.Admin.DeleteUser(r.Context(), id)
+	if errors.Is(err, admin.ErrUserHasHistory) {
+		s.setFlash(w, "error", "Pengguna tidak dapat dihapus karena pernah menjalankan migration. Untuk mencabut akses, keluarkan pengguna dari semua group.")
+		http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
+		return
+	}
+	s.done(w, r, "/admin/users", "Pengguna dihapus.", err)
 }
 
 // group

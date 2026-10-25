@@ -11,7 +11,10 @@ import (
 	"github.com/alyanrrhma/TubesWBD-K02-08/internal/database"
 )
 
-var ErrNotFound = errors.New("data tidak ditemukan")
+var (
+	ErrNotFound       = errors.New("data tidak ditemukan")
+	ErrUserHasHistory = errors.New("admin: user has migration history")
+)
 
 type InputError struct{ Message string }
 
@@ -55,6 +58,7 @@ func pgCode(err error) string {
 }
 
 const (
-	pgUniqueViolation     = "23505"
-	pgForeignKeyViolation = "23503"
+	pgUniqueViolation              = "23505"
+	pgForeignKeyViolation          = "23503"
+	migrationHistoryUserConstraint = "migration_history_executed_by_fkey"
 )

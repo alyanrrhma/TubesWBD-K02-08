@@ -59,6 +59,7 @@ type fakeAdmin struct {
 	users       *fakeUsers
 	groups      []admin.Group
 	connections []admin.Connection
+	deleteError error
 }
 
 func (a *fakeAdmin) GetUser(_ context.Context, id int64) (*admin.User, error) {
@@ -95,7 +96,7 @@ func (a *fakeAdmin) CreateUser(_ context.Context, name, _ string, isAdmin bool) 
 	return &u.User, nil
 }
 
-func (a *fakeAdmin) DeleteUser(context.Context, int64) error { return nil }
+func (a *fakeAdmin) DeleteUser(context.Context, int64) error { return a.deleteError }
 
 func (a *fakeAdmin) ListConnections(context.Context) ([]admin.Connection, error) {
 	return a.connections, nil

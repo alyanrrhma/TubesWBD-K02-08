@@ -17,6 +17,7 @@ import (
 	"github.com/alyanrrhma/TubesWBD-K02-08/internal/auth"
 	"github.com/alyanrrhma/TubesWBD-K02-08/internal/database"
 	"github.com/alyanrrhma/TubesWBD-K02-08/internal/platformdb"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 var testKey = bytes.Repeat([]byte{7}, 32)
@@ -78,6 +79,32 @@ func TestConnectionInputValidation(t *testing.T) {
 		if err := in.normalize(); !errors.As(err, &ie) {
 			t.Errorf("%s: harus InputError, dapat %v", name, err)
 		}
+	}
+}
+
+func TestUserDeleteErrorMapsOnlyMigrationHistoryConstraint(t *testing.T) {
+	err := &pgconn.PgError{
+		Code:           pgForeignKeyViolation,
+		ConstraintName: migrationHistoryUserConstraint,
+	}
+	if !errors.Is(userDeleteError(err), ErrUserHasHistory) {
+		t.Fatal("FK riwayat migration harus dikenali sebagai ErrUserHasHistory")
+	}
+
+	otherConstraint := &pgconn.PgError{
+		Code:           pgForeignKeyViolation,
+		ConstraintName: "some_other_user_fkey",
+	}
+	if got := userDeleteError(otherConstraint); got != otherConstraint {
+		t.Fatal("FK lain harus tetap menjadi error aslinya")
+	}
+
+	otherViolation := &pgconn.PgError{
+		Code:           pgUniqueViolation,
+		ConstraintName: migrationHistoryUserConstraint,
+	}
+	if got := userDeleteError(otherViolation); got != otherViolation {
+		t.Fatal("pelanggaran selain FK harus tetap menjadi error aslinya")
 	}
 }
 

@@ -56,6 +56,7 @@ type env struct {
 	migs           *recordingMigrations
 	clock          *clock
 	mgr            *auth.Manager
+	admin          *fakeAdmin
 	salesID, invID int64
 }
 
@@ -103,6 +104,7 @@ func newEnv(t *testing.T) *env {
 	}
 	e.migs = &recordingMigrations{access: e.access}
 	adminSvc := &fakeAdmin{users: users, connections: []admin.Connection{{ID: 1, Name: "Target", Host: "localhost", Port: 5433, Database: "dbmp_target", Username: "dbmp", SSLMode: "disable", Complete: true}}}
+	e.admin = adminSvc
 
 	srv, err := web.New(web.Deps{
 		Config: cfg, Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
@@ -443,6 +445,24 @@ func TestAdminCreateUserFlashAndSelfDelete(t *testing.T) {
 	e.postCSRF(c, "/admin/users/"+"1"+"/delete", url.Values{}) // id 1 = admin sendiri
 	if _, body = e.get(c, "/admin/users"); !strings.Contains(body, "tidak dapat menghapus akun yang sedang dipakai") {
 		t.Fatal("menghapus akun sendiri harus ditolak dengan pesan")
+	}
+}
+
+func TestAdminDeleteUserWithMigrationHistoryShowsFlash(t *testing.T) {
+	e := newEnv(t)
+	c := e.login("admin")
+	e.admin.deleteError = admin.ErrUserHasHistory
+
+	resp, _ := e.postCSRF(c, "/admin/users/3/delete", url.Values{})
+	if resp.StatusCode != http.StatusSeeOther || resp.Header.Get("Location") != "/admin/users" {
+		t.Fatalf("hapus user ber-riwayat harus kembali ke daftar user, dapat status %d dan Location %q", resp.StatusCode, resp.Header.Get("Location"))
+	}
+
+	resp, body := e.get(c, "/admin/users")
+	if resp.StatusCode != http.StatusOK ||
+		!strings.Contains(body, "Pengguna tidak dapat dihapus karena pernah menjalankan migration") ||
+		!strings.Contains(body, "Untuk mencabut akses") {
+		t.Fatal("pesan penolakan harus tampil di halaman daftar pengguna")
 	}
 }
 
