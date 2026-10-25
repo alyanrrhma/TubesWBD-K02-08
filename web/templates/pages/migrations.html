@@ -19,9 +19,19 @@
       <label>SQL
         <textarea name="sql" class="sql" rows="9" spellcheck="false" placeholder="ALTER TABLE customers ADD COLUMN phone TEXT;" required>{{.Draft}}</textarea>
       </label>
-      <p class="muted">Dijalankan dalam satu transaksi: di-commit jika berhasil, di-rollback jika gagal. Hasilnya tercatat di riwayat.</p>
-      <div><button class="btn" type="submit" data-confirm="Jalankan migration ini pada {{.DB.Name}}?">Jalankan migration</button></div>
+      <p class="muted">Periksa estimated execution plan untuk satu query sebelum menjalankannya. EXPLAIN tidak menjalankan query dan PostgreSQL hanya mendukung jenis query tertentu (misalnya SELECT, INSERT, UPDATE, atau DELETE); perintah DDL seperti CREATE TABLE tidak memiliki execution plan.</p>
+      <div class="actions">
+        <button class="btn btn-secondary" type="submit" formaction="/databases/{{.DB.ID}}/migrations/explain">Analisis execution plan</button>
+        <button class="btn" type="submit" data-confirm="Jalankan migration ini pada {{.DB.Name}}?">Jalankan migration</button>
+      </div>
     </form>
+    {{if .Plan}}
+    <section aria-labelledby="plan-title">
+      <h3 id="plan-title">Estimated execution plan</h3>
+      <p class="muted">Dihasilkan PostgreSQL dengan <code>EXPLAIN (FORMAT JSON)</code>. Query belum dieksekusi; actual execution time dan jumlah row aktual tidak tersedia.</p>
+      <pre class="sqlblock">{{.Plan}}</pre>
+    </section>
+    {{end}}
   </section>
   {{else}}
   <div class="notice">

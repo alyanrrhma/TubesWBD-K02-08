@@ -55,6 +55,35 @@ func TestExecute_RejectsBeforeTouchingDatabases(t *testing.T) {
 	}
 }
 
+func TestExplain_ValidatesAndAuthorizesBeforeConnecting(t *testing.T) {
+	ctx := context.Background()
+	allowed := fakeAuthz{view: true, edit: true}
+	cases := []struct {
+		name string
+		svc  *Service
+		uid  int64
+		dbID int64
+		sql  string
+		want error
+	}{
+		{"invalid user", NewService(nil, fakeTargets{}, allowed), 0, 1, "SELECT 1", ErrInvalidArgument},
+		{"empty SQL", NewService(nil, fakeTargets{}, allowed), 1, 1, " ", ErrEmptySQL},
+		{"too large", NewService(nil, fakeTargets{}, allowed), 1, 1, strings.Repeat("x", maxSQLBytes+1), ErrSQLTooLarge},
+		{"NUL byte", NewService(nil, fakeTargets{}, allowed), 1, 1, "SELECT '\x00'", ErrInvalidSQL},
+		{"multiple statements rejected", NewService(nil, fakeTargets{}, allowed), 1, 1, "SELECT 1; DROP TABLE customers", ErrExplainSingleStatement},
+		{"view only rejected", NewService(nil, fakeTargets{}, fakeAuthz{view: true}), 1, 1, "", ErrForbidden},
+		{"inactive target", NewService(nil, fakeTargets{err: database.ErrNotRegistered}, allowed), 1, 1, "SELECT 1", database.ErrNotRegistered},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := tc.svc.Explain(ctx, tc.uid, tc.dbID, tc.sql)
+			if !errors.Is(err, tc.want) {
+				t.Fatalf("want %v, got %v", tc.want, err)
+			}
+		})
+	}
+}
+
 func TestHistory_ForbiddenAndInvalid(t *testing.T) {
 	svc := NewService(nil, fakeTargets{}, fakeAuthz{}) // tidak punya akses sama sekali
 	ctx := context.Background()

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/alyanrrhma/TubesWBD-K02-08/internal/access"
+	"github.com/alyanrrhma/TubesWBD-K02-08/internal/admin"
 	"github.com/alyanrrhma/TubesWBD-K02-08/internal/auth"
 	"github.com/alyanrrhma/TubesWBD-K02-08/internal/config"
 	"github.com/alyanrrhma/TubesWBD-K02-08/internal/database"
@@ -98,10 +99,11 @@ func newEnv(t *testing.T) *env {
 		},
 	}
 	e.migs = &recordingMigrations{access: e.access}
+	adminSvc := &fakeAdmin{users: users, connections: []admin.Connection{{ID: 1, Name: "Target", Host: "localhost", Port: 5433, Database: "dbmp_target", Username: "dbmp", SSLMode: "disable", Complete: true}}}
 
 	srv, err := web.New(web.Deps{
 		Config: cfg, Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
-		Sessions: mgr, Users: users, Admin: &fakeAdmin{users: users},
+		Sessions: mgr, Users: users, Admin: adminSvc,
 		Viewer: e.viewer, Migrations: e.migs,
 	})
 	if err != nil {
@@ -400,6 +402,24 @@ func TestAdminPagesRestrictedToAdmin(t *testing.T) {
 	}
 }
 
+func TestAdminCanEditConnectionAndReenterPassword(t *testing.T) {
+	e := newEnv(t)
+	adminClient := e.login("admin")
+	resp, body := e.get(adminClient, "/admin/connections")
+	if resp.StatusCode != http.StatusOK || !strings.Contains(body, `action="/admin/connections/1"`) || !strings.Contains(body, "Kosongkan untuk mempertahankan password") {
+		t.Fatalf("form edit koneksi harus tampil tanpa password tersimpan: status %d", resp.StatusCode)
+	}
+	form := url.Values{"name": {"Target diperbarui"}, "host": {"localhost"}, "port": {"5433"}, "database": {"dbmp_target"}, "username": {"dbmp"}, "password": {"dbmp_dev_password"}, "ssl_mode": {"disable"}}
+	resp, _ = e.postCSRF(adminClient, "/admin/connections/1", form)
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("update koneksi status %d", resp.StatusCode)
+	}
+	resp, body = e.get(adminClient, "/admin/connections")
+	if resp.StatusCode != http.StatusOK || !strings.Contains(body, "Target diperbarui") || !strings.Contains(body, "Koneksi berhasil diperbarui") {
+		t.Fatal("perubahan koneksi dan status sukses harus terlihat")
+	}
+}
+
 func TestAdminCreateUserFlashAndSelfDelete(t *testing.T) {
 	e := newEnv(t)
 	c := e.login("admin")
@@ -444,8 +464,26 @@ func TestMigrationViewOnlyCannotExecute(t *testing.T) {
 	if resp.StatusCode != http.StatusForbidden {
 		t.Fatalf("View Only POST migration langsung: status %d, ingin 403", resp.StatusCode)
 	}
+	resp, _ = e.postCSRF(bob, "/databases/100/migrations/explain", url.Values{"sql": {"SELECT * FROM customers"}})
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("View Only EXPLAIN langsung: status %d, ingin 403", resp.StatusCode)
+	}
 	if len(e.migs.history) != 0 {
 		t.Fatal("history tidak boleh bertambah")
+	}
+}
+
+func TestMigrationExplainShowsPlanBeforeExecution(t *testing.T) {
+	e := newEnv(t)
+	alice := e.login("alice")
+	path := "/databases/100/migrations/explain"
+	sql := "SELECT * FROM customers WHERE id = 1"
+	resp, body := e.postCSRF(alice, path, url.Values{"sql": {sql}})
+	if resp.StatusCode != http.StatusOK || !strings.Contains(body, "Estimated execution plan") || !strings.Contains(body, "Node Type") || !strings.Contains(body, sql) {
+		t.Fatalf("EXPLAIN harus menampilkan SQL dan plan: status %d", resp.StatusCode)
+	}
+	if len(e.migs.history) != 0 {
+		t.Fatal("EXPLAIN tidak boleh mengeksekusi atau mencatat migration")
 	}
 }
 

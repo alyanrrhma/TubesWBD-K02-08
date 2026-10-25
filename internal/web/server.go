@@ -64,6 +64,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /databases/{databaseID}/tables/{schema}/{table}/data", authed(s.tableData))
 	mux.Handle("GET /databases/{databaseID}/migrations", authed(s.migrationsPage))
 	mux.Handle("GET /databases/{databaseID}/migrations/{version}", authed(s.migrationDetailPage))
+	mux.Handle("POST /databases/{databaseID}/migrations/explain", authed(s.migrationsExplain))
 	mux.Handle("POST /databases/{databaseID}/migrations", authed(s.migrationsExecute))
 
 	// Admin (hanya Platform Admin)
@@ -85,6 +86,7 @@ func (s *Server) Handler() http.Handler {
 
 	mux.Handle("GET /admin/connections", admin(s.connectionsPage))
 	mux.Handle("POST /admin/connections", admin(s.connectionsCreate))
+	mux.Handle("POST /admin/connections/{id}", admin(s.connectionsUpdate))
 	mux.Handle("POST /admin/connections/{id}/test", admin(s.connectionsTest))
 	mux.Handle("POST /admin/connections/{id}/delete", admin(s.connectionsDelete))
 

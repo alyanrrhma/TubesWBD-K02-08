@@ -56,8 +56,9 @@ func (f *fakeUsers) id(name string) int64 { return f.users[name].ID }
 // web.AdminService: hanya method yang dipakai test; sisanya nil -> panic bila terpanggil.
 type fakeAdmin struct {
 	web.AdminService
-	users  *fakeUsers
-	groups []admin.Group
+	users       *fakeUsers
+	groups      []admin.Group
+	connections []admin.Connection
 }
 
 func (a *fakeAdmin) GetUser(_ context.Context, id int64) (*admin.User, error) {
@@ -95,6 +96,22 @@ func (a *fakeAdmin) CreateUser(_ context.Context, name, _ string, isAdmin bool) 
 }
 
 func (a *fakeAdmin) DeleteUser(context.Context, int64) error { return nil }
+
+func (a *fakeAdmin) ListConnections(context.Context) ([]admin.Connection, error) {
+	return a.connections, nil
+}
+
+func (a *fakeAdmin) UpdateConnection(_ context.Context, id int64, in admin.ConnectionInput) (*admin.Connection, error) {
+	for i := range a.connections {
+		if a.connections[i].ID == id {
+			c := &a.connections[i]
+			c.Name, c.Host, c.Port, c.Database, c.Username, c.SSLMode = in.Name, in.Host, in.Port, in.Database, in.Username, in.SSLMode
+			c.Active, c.Complete = true, true
+			return c, nil
+		}
+	}
+	return nil, admin.ErrNotFound
+}
 
 func (a *fakeAdmin) ListGroups(context.Context) ([]admin.Group, error) { return a.groups, nil }
 
@@ -240,4 +257,14 @@ func (m *recordingMigrations) Execute(ctx context.Context, u, d int64, sql strin
 	}
 	m.history = append([]web.MigrationRecord{rec}, m.history...)
 	return &rec, nil
+}
+
+func (m *recordingMigrations) Explain(ctx context.Context, u, d int64, sql string) (string, error) {
+	if err := m.access.Require(ctx, u, d, access.ViewEdit); err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(sql) == "" {
+		return "", migration.ErrEmptySQL
+	}
+	return `[{"Plan":{"Node Type":"Result","Startup Cost":0.00,"Total Cost":0.01,"Plan Rows":1}}]`, nil
 }
