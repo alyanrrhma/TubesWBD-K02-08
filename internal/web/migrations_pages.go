@@ -19,6 +19,11 @@ type migrationsPageData struct {
 	Failure string // pesan kegagalan eksekusi (rollback)
 }
 
+type migrationDetailPageData struct {
+	DB     *DatabaseView
+	Record *MigrationRecord
+}
+
 const migrationHistoryPageSize = 25
 
 func (s *Server) migrationsPage(w http.ResponseWriter, r *http.Request) {
@@ -92,4 +97,61 @@ func (s *Server) migrationsExecute(w http.ResponseWriter, r *http.Request) {
 	}
 	s.setFlash(w, "success", "Migration berhasil di-commit.")
 	http.Redirect(w, r, "/databases/"+r.PathValue("databaseID")+"/migrations", http.StatusSeeOther)
+}
+
+func (s *Server) migrationDetailPage(w http.ResponseWriter, r *http.Request) {
+	databaseID, ok := s.pathID(w, r, "databaseID")
+	if !ok {
+		return
+	}
+
+	version, err := strconv.ParseInt(r.PathValue("version"), 10, 64)
+	if err != nil || version < 1 {
+		s.errorPage(
+			w,
+			r,
+			http.StatusBadRequest,
+			"Versi tidak valid",
+			"Versi migration harus berupa bilangan positif.",
+		)
+		return
+	}
+
+	ctx := r.Context()
+	userID := currentUser(r).ID
+
+	db, err := s.Viewer.Database(ctx, userID, databaseID)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+
+	record, err := s.Migrations.Detail(ctx, userID, databaseID, version)
+	if errors.Is(err, migration.ErrMigrationNotFound) {
+		s.errorPage(
+			w,
+			r,
+			http.StatusNotFound,
+			"Migration tidak ditemukan",
+			"Versi migration yang diminta tidak ada pada database ini.",
+		)
+		return
+	}
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+
+	s.render(
+		w,
+		r,
+		http.StatusOK,
+		"migration_detail",
+		"Detail Migration · "+db.Name,
+		"dashboard",
+		migrationDetailPageData{
+			DB:     db,
+			Record: record,
+		},
+	)
 }

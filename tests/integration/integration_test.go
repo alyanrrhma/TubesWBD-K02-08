@@ -278,8 +278,11 @@ func TestEndToEndAdminToViewer(t *testing.T) {
 	if r := s.post(v, db+"/migrations", url.Values{"sql": {"SELECT 1"}}); r.StatusCode != http.StatusSeeOther {
 		t.Fatalf("View + Edit harus dapat menjalankan migration, dapat %d", r.StatusCode)
 	}
-	if _, body := s.do(v, "GET", db+"/migrations", nil); !strings.Contains(body, "v1") || !strings.Contains(body, "SELECT 1") {
-		t.Fatal("riwayat migration harus menampilkan versi dan SQL yang dijalankan")
+	if _, body := s.do(v, "GET", db+"/migrations", nil); !strings.Contains(body, "v1") {
+		t.Fatal("riwayat migration harus menampilkan versi")
+	}
+	if r, body := s.do(v, "GET", db+"/migrations/1", nil); r.StatusCode != http.StatusOK || !strings.Contains(body, "SELECT 1") {
+		t.Fatal("detail migration harus menampilkan SQL yang dijalankan")
 	}
 
 	// --- Hapus koneksi: viewer kehilangan akses dan Registry dibersihkan.

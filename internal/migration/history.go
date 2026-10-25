@@ -30,7 +30,7 @@ func (s *Service) requireView(ctx context.Context, userID, databaseID int64) err
 }
 
 // ListHistory mengembalikan riwayat migration satu database (terbaru dulu),
-// termasuk SQL yang dijalankan, beserta total baris. Page dimulai dari 1.
+// tanpa SQL lengkap, beserta total baris. Page dimulai dari 1.
 func (s *Service) ListHistory(ctx context.Context, userID, databaseID int64, page, pageSize int) ([]Migration, int, error) {
 	if page < 1 {
 		return nil, 0, fmt.Errorf("%w: page must be at least 1", ErrInvalidArgument)
@@ -55,7 +55,7 @@ func (s *Service) ListHistory(ctx context.Context, userID, databaseID int64, pag
 	}
 
 	rows, err := s.platform.QueryContext(ctx, `
-		SELECT m.id, m.database_id, m.version, m.sql_text, m.executed_by, u.username,
+		SELECT m.id, m.database_id, m.version, m.executed_by, u.username,
 		       m.executed_at, m.status, COALESCE(m.error_message, '')
 		FROM migration_history m
 		JOIN users u ON u.id = m.executed_by
@@ -73,7 +73,7 @@ func (s *Service) ListHistory(ctx context.Context, userID, databaseID int64, pag
 		var m Migration
 		var status string
 		if err := rows.Scan(
-			&m.ID, &m.DatabaseID, &m.Version, &m.SQLText, &m.ExecutedBy, &m.ExecutedByName,
+			&m.ID, &m.DatabaseID, &m.Version, &m.ExecutedBy, &m.ExecutedByName,
 			&m.ExecutedAt, &status, &m.ErrorMessage,
 		); err != nil {
 			return nil, 0, fmt.Errorf("scan migration history: %w", err)

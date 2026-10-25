@@ -34,20 +34,38 @@
     {{if .History}}
     <div class="scroll">
     <table>
-      <thead><tr><th>Versi</th><th>Status</th><th>Dijalankan oleh</th><th>Waktu</th><th>SQL</th></tr></thead>
+      <thead>
+        <tr>
+          <th>Versi</th>
+          <th>Status</th>
+          <th>Dijalankan oleh</th>
+          <th>Waktu</th>
+          <th>Detail</th>
+        </tr>
+      </thead>
       <tbody>
       {{range .History}}
         <tr>
-          <td class="mono">{{if .Version}}v{{.Version}}{{else}}-{{end}}</td>
-          <td><span class="status status-{{if eq .Status "SUCCESS"}}ok{{else}}fail{{end}}">{{if eq .Status "SUCCESS"}}Berhasil{{else}}Gagal, di-rollback{{end}}</span></td>
+          <td class="mono">
+            {{if .Version}}
+              <a href="/databases/{{$.Data.DB.ID}}/migrations/{{.Version}}">v{{.Version}}</a>
+            {{else}}
+              -
+            {{end}}
+          </td>
+          <td>
+            <span class="status status-{{if eq .Status "SUCCESS"}}ok{{else}}fail{{end}}">
+              {{if eq .Status "SUCCESS"}}Berhasil{{else}}Gagal, di-rollback{{end}}
+            </span>
+          </td>
           <td>{{.ExecutedBy}}</td>
           <td>{{fmtTime .ExecutedAt}}</td>
           <td>
-            <details>
-              <summary class="mono">{{printf "%.60s" .SQL}}</summary>
-              <pre class="sqlblock">{{.SQL}}</pre>
-              {{if .ErrorMessage}}<p class="errtext">{{.ErrorMessage}}</p>{{end}}
-            </details>
+            {{if .Version}}
+              <a href="/databases/{{$.Data.DB.ID}}/migrations/{{.Version}}">Lihat detail SQL</a>
+            {{else}}
+              -
+            {{end}}
           </td>
         </tr>
       {{end}}

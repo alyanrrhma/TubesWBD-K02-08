@@ -41,8 +41,8 @@ type DatabaseView struct {
 	Host     string
 	Port     int
 	Database string
-	Level    access.Level 
-	Active   bool        
+	Level    access.Level
+	Active   bool
 }
 
 type CellView struct {
@@ -79,12 +79,12 @@ type Viewer interface {
 
 const (
 	MigrationSuccess = "SUCCESS"
-	MigrationFailed  = "FAILED"  
+	MigrationFailed  = "FAILED"
 )
 
 type MigrationRecord struct {
 	ID           int64
-	Version      int 
+	Version      int
 	SQL          string
 	ExecutedBy   string
 	ExecutedAt   time.Time
@@ -94,5 +94,6 @@ type MigrationRecord struct {
 
 type Migrations interface {
 	History(ctx context.Context, userID, databaseID int64, page, pageSize int) ([]MigrationRecord, int, error)
+	Detail(ctx context.Context, userID, databaseID, version int64) (*MigrationRecord, error)
 	Execute(ctx context.Context, userID, databaseID int64, sql string) (*MigrationRecord, error)
 }

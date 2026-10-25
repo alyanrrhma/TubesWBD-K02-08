@@ -459,8 +459,10 @@ func TestMigrationExecuteSuccessFailureAndEmpty(t *testing.T) {
 		t.Fatalf("migration sukses: status %d", resp.StatusCode)
 	}
 	_, body := e.get(alice, path)
-	if !strings.Contains(body, "Migration berhasil di-commit.") || !strings.Contains(body, ">v1<") || !strings.Contains(body, `name="sql"`) {
-		t.Fatal("history harus menampilkan v1, flash sukses, dan editor")
+	if !strings.Contains(body, "Migration berhasil di-commit.") ||
+		!strings.Contains(body, `href="/databases/100/migrations/1"`) ||
+		!strings.Contains(body, `name="sql"`) {
+		t.Fatal("history harus menampilkan tautan v1, flash sukses, dan editor")
 	}
 
 	bad := "SELECT fail;"
@@ -485,8 +487,10 @@ func TestMigrationHistoryPagination(t *testing.T) {
 		}
 	}
 	_, body := e.get(alice, path+"?page=2")
-	if !strings.Contains(body, "Halaman 2 dari 2") || !strings.Contains(body, ">v2<") || !strings.Contains(body, ">v1<") {
-		t.Fatal("halaman kedua harus menampilkan migration tertua dengan navigasi halaman")
+	if !strings.Contains(body, "Halaman 2 dari 2") ||
+		!strings.Contains(body, `href="/databases/100/migrations/2"`) ||
+		!strings.Contains(body, `href="/databases/100/migrations/1"`) {
+		t.Fatal("halaman kedua harus menampilkan tautan migration tertua dengan navigasi halaman")
 	}
 	resp, _ := e.get(alice, path+"?page=0")
 	if resp.StatusCode != http.StatusBadRequest {

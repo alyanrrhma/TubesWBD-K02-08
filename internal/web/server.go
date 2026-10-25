@@ -14,8 +14,8 @@ import (
 type Deps struct {
 	Config     *config.Config
 	Logger     *slog.Logger
-	Sessions   *auth.Manager      
-	Users      auth.UserRepository 
+	Sessions   *auth.Manager
+	Users      auth.UserRepository
 	Admin      AdminService
 	Viewer     Viewer
 	Migrations Migrations
@@ -58,11 +58,12 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /logout", authed(s.logout))
 	mux.Handle("GET /dashboard", authed(s.dashboard))
 
-	// Viewer dan migration. Nama wildcard {databaseID} sama dengan yang dipakai access.Middleware 
+	// Viewer dan migration. Nama wildcard {databaseID} sama dengan yang dipakai access.Middleware
 	mux.Handle("GET /databases/{databaseID}", authed(s.databasePage))
 	mux.Handle("GET /databases/{databaseID}/tables/{schema}/{table}", authed(s.tableStructure))
 	mux.Handle("GET /databases/{databaseID}/tables/{schema}/{table}/data", authed(s.tableData))
 	mux.Handle("GET /databases/{databaseID}/migrations", authed(s.migrationsPage))
+	mux.Handle("GET /databases/{databaseID}/migrations/{version}", authed(s.migrationDetailPage))
 	mux.Handle("POST /databases/{databaseID}/migrations", authed(s.migrationsExecute))
 
 	// Admin (hanya Platform Admin)

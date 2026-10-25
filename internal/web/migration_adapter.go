@@ -29,6 +29,26 @@ func (a MigrationAdapter) History(ctx context.Context, userID, databaseID int64,
 	return migrationRecords(items), total, nil
 }
 
+func (a MigrationAdapter) Detail(ctx context.Context, userID, databaseID, version int64) (*MigrationRecord, error) {
+	if a.Service == nil {
+		return nil, errors.New("migration service is not configured")
+	}
+
+	item, err := a.Service.GetMigration(ctx, userID, databaseID, version)
+	if errors.Is(err, migration.ErrForbidden) {
+		return nil, access.ErrForbidden
+	}
+	if errors.Is(err, migration.ErrMigrationNotFound) {
+		return nil, err
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	record := migrationRecords([]migration.Migration{item})[0]
+	return &record, nil
+}
+
 func (a MigrationAdapter) Execute(ctx context.Context, userID, databaseID int64, sqlText string) (*MigrationRecord, error) {
 	if a.Service == nil {
 		return nil, errors.New("migration service is not configured")

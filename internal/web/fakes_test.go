@@ -207,6 +207,24 @@ func (m *recordingMigrations) History(ctx context.Context, u, d int64, page, pag
 	return m.history[start:end], total, nil
 }
 
+func (m *recordingMigrations) Detail(
+	ctx context.Context,
+	userID, databaseID, version int64,
+) (*web.MigrationRecord, error) {
+	if err := m.access.Require(ctx, userID, databaseID, access.ViewOnly); err != nil {
+		return nil, err
+	}
+
+	for _, record := range m.history {
+		if int64(record.Version) == version {
+			result := record
+			return &result, nil
+		}
+	}
+
+	return nil, migration.ErrMigrationNotFound
+}
+
 func (m *recordingMigrations) Execute(ctx context.Context, u, d int64, sql string) (*web.MigrationRecord, error) {
 	if err := m.access.Require(ctx, u, d, access.ViewEdit); err != nil {
 		return nil, err
