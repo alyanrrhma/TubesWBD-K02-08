@@ -211,9 +211,8 @@ func TestReadTableDataUsesReadOnlyTransaction(t *testing.T) {
 		t.Fatal("expected the write inside the view to be rejected")
 	}
 
-	var pgErr interface{ SQLState() string }
-	if !errors.As(err, &pgErr) || pgErr.SQLState() != "25006" {
-		t.Fatalf("expected read-only transaction error (SQLSTATE 25006), got %v", err)
+	if !errors.Is(err, ErrWriteRejected) {
+		t.Fatalf("expected ErrWriteRejected, got %v", err)
 	}
 }
 

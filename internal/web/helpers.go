@@ -37,6 +37,10 @@ func (s *Server) fail(w http.ResponseWriter, r *http.Request, err error) {
 		s.errorPage(w, r, http.StatusBadGateway, "Koneksi database gagal", "Tidak dapat terhubung ke database target. Periksa pengaturan koneksi atau hubungi administrator.")
 	case errors.Is(err, database.ErrTargetPermissionDenied):
 		s.errorPage(w, r, http.StatusBadGateway, "Database target menolak akses", "Akun koneksi tidak memiliki hak yang cukup di database target. Hubungi administrator.")
+	case errors.Is(err, database.ErrQueryTimeout):
+		s.errorPage(w, r, http.StatusGatewayTimeout, "Database target terlalu lama merespons", "Permintaan ke database target melewati batas waktu. Coba lagi nanti.")
+	case errors.Is(err, database.ErrWriteRejected):
+		s.errorPage(w, r, http.StatusForbidden, "Penulisan ditolak", "Viewer hanya mengizinkan pembacaan data.")
 	case errors.Is(err, database.ErrInvalidArgument):
 		s.errorPage(w, r, http.StatusBadRequest, "Permintaan tidak valid", "Parameter yang dikirim tidak valid.")
 	case errors.Is(err, migration.ErrMigrationNotFound):

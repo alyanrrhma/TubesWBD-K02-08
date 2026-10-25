@@ -534,6 +534,8 @@ func TestTargetErrorsDoNotLeakDetails(t *testing.T) {
 		wrap(database.ErrNotRegistered, "id 100"):                 {http.StatusServiceUnavailable, "belum aktif"},
 		wrap(database.ErrTargetPermissionDenied, "host=10.0.0.5"): {http.StatusBadGateway, "menolak akses"},
 		wrap(database.ErrTableNotFound, "\"x\".\"y\""):            {http.StatusNotFound, "tidak ditemukan"},
+		wrap(database.ErrQueryTimeout, "count table rows"):        {http.StatusGatewayTimeout, "Database target terlalu lama merespons"},
+		wrap(database.ErrWriteRejected, "read table data"):        {http.StatusForbidden, "Penulisan ditolak"},
 		io.ErrUnexpectedEOF: {http.StatusInternalServerError, "tidak dapat diproses"},
 	}
 	for err, want := range cases {

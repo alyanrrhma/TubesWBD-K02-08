@@ -14,6 +14,9 @@ const queryTimeout = 15 * time.Second
 
 // wrapQueryError menerjemahkan error PostgreSQL yang penting menjadi sentinel.
 func wrapQueryError(op string, err error) error {
+	if errors.Is(err, context.DeadlineExceeded) {
+		return fmt.Errorf("%w: %s", ErrQueryTimeout, op)
+	}
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) {
 		switch pgErr.Code {
@@ -21,6 +24,10 @@ func wrapQueryError(op string, err error) error {
 			return fmt.Errorf("%w: %s", ErrTargetPermissionDenied, op)
 		case "42P01": // undefined_table
 			return fmt.Errorf("%w: %s", ErrTableNotFound, op)
+		case "57014": // query_canceled: pembatalan dari server saat batas waktu habis
+			return fmt.Errorf("%w: %s", ErrQueryTimeout, op)
+		case "25006": // read_only_sql_transaction
+			return fmt.Errorf("%w: %s", ErrWriteRejected, op)
 		}
 	}
 	return fmt.Errorf("%s: %w", op, err)
@@ -75,7 +82,7 @@ func ListTables(ctx context.Context, db *sql.DB, schema string) ([]Table, error)
 		ORDER BY table_name
 	`, schema)
 	if err != nil {
-		return nil, fmt.Errorf("list tables: %w", err)
+		return nil, wrapQueryError("list tables", err)
 	}
 	defer rows.Close()
 
@@ -84,13 +91,13 @@ func ListTables(ctx context.Context, db *sql.DB, schema string) ([]Table, error)
 	for rows.Next() {
 		var table Table
 		if err := rows.Scan(&table.Schema, &table.Name); err != nil {
-			return nil, fmt.Errorf("scan table: %w", err)
+			return nil, wrapQueryError("scan table", err)
 		}
 		tables = append(tables, table)
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate tables: %w", err)
+		return nil, wrapQueryError("iterate tables", err)
 	}
 
 	return tables, nil
@@ -117,7 +124,7 @@ func ListColumns(ctx context.Context, db *sql.DB, schema string, table string) (
 		ORDER BY ordinal_position
 	`, schema, table)
 	if err != nil {
-		return nil, fmt.Errorf("list columns: %w", err)
+		return nil, wrapQueryError("list columns", err)
 	}
 	defer rows.Close()
 
@@ -133,7 +140,7 @@ func ListColumns(ctx context.Context, db *sql.DB, schema string, table string) (
 			&nullable,
 			&column.Position,
 		); err != nil {
-			return nil, fmt.Errorf("scan column: %w", err)
+			return nil, wrapQueryError("scan column", err)
 		}
 
 		column.IsNullable = nullable == "YES"
@@ -141,7 +148,7 @@ func ListColumns(ctx context.Context, db *sql.DB, schema string, table string) (
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate columns: %w", err)
+		return nil, wrapQueryError("iterate columns", err)
 	}
 
 	return columns, nil
@@ -166,7 +173,7 @@ func ListSchemas(ctx context.Context, db *sql.DB) ([]Schema, error) {
 		ORDER BY schema_name
 	`)
 	if err != nil {
-		return nil, fmt.Errorf("list schemas: %w", err)
+		return nil, wrapQueryError("list schemas", err)
 	}
 	defer rows.Close()
 
@@ -175,13 +182,13 @@ func ListSchemas(ctx context.Context, db *sql.DB) ([]Schema, error) {
 	for rows.Next() {
 		var schema Schema
 		if err := rows.Scan(&schema.Name); err != nil {
-			return nil, fmt.Errorf("scan schema: %w", err)
+			return nil, wrapQueryError("scan schema", err)
 		}
 		schemas = append(schemas, schema)
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate schemas: %w", err)
+		return nil, wrapQueryError("iterate schemas", err)
 	}
 
 	return schemas, nil
@@ -220,7 +227,7 @@ func ListConstraints(ctx context.Context, db *sql.DB, schema string, table strin
 
 	rows, err := db.QueryContext(ctx, query, schema, table)
 	if err != nil {
-		return nil, fmt.Errorf("list table constraints: %w", err)
+		return nil, wrapQueryError("list table constraints", err)
 	}
 	defer rows.Close()
 
@@ -229,13 +236,13 @@ func ListConstraints(ctx context.Context, db *sql.DB, schema string, table strin
 	for rows.Next() {
 		var c Constraint
 		if err := rows.Scan(&c.Name, &c.Type, &c.Definition); err != nil {
-			return nil, fmt.Errorf("scan table constraint: %w", err)
+			return nil, wrapQueryError("scan table constraint", err)
 		}
 		constraints = append(constraints, c)
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate table constraints: %w", err)
+		return nil, wrapQueryError("iterate table constraints", err)
 	}
 
 	return constraints, nil
@@ -268,7 +275,7 @@ func ListIndexes(ctx context.Context, db *sql.DB, schema string, table string) (
 		ORDER BY idx.relname
 	`, schema, table)
 	if err != nil {
-		return nil, fmt.Errorf("list indexes: %w", err)
+		return nil, wrapQueryError("list indexes", err)
 	}
 	defer rows.Close()
 
@@ -282,13 +289,13 @@ func ListIndexes(ctx context.Context, db *sql.DB, schema string, table string) (
 			&idx.IsUnique,
 			&idx.IsPrimary,
 		); err != nil {
-			return nil, fmt.Errorf("scan index: %w", err)
+			return nil, wrapQueryError("scan index", err)
 		}
 		indexes = append(indexes, idx)
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate indexes: %w", err)
+		return nil, wrapQueryError("iterate indexes", err)
 	}
 
 	return indexes, nil
@@ -390,7 +397,7 @@ func ReadTableData(ctx context.Context, db *sql.DB, schema string, table string,
 		}
 
 		if err := rows.Scan(destinations...); err != nil {
-			return TableData{}, fmt.Errorf("scan table row: %w", err)
+			return TableData{}, wrapQueryError("scan table row", err)
 		}
 
 		result.Rows = append(result.Rows, values)
@@ -440,7 +447,7 @@ func primaryKeyColumns(ctx context.Context, tx *sql.Tx, schema string, table str
 	for rows.Next() {
 		var column string
 		if err := rows.Scan(&column); err != nil {
-			return nil, fmt.Errorf("scan primary key column: %w", err)
+			return nil, wrapQueryError("scan primary key column", err)
 		}
 		columns = append(columns, column)
 	}
