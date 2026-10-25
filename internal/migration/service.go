@@ -104,10 +104,9 @@ func (s *Service) Execute(ctx context.Context, userID, databaseID int64, sqlText
 	return rec, nil
 }
 
-// Explain returns PostgreSQL's estimated plan without executing the submitted SQL.
-// In particular, EXPLAIN ANALYZE is deliberately not used here because migration
-// statements can modify target data.
-func (s *Service) Explain(ctx context.Context, userID, databaseID int64, sqlText string) (string, error) {
+// Explain returns PostgreSQL's execution plan. Analyze mode executes the query
+// inside a transaction that is always rolled back after collecting the plan.
+func (s *Service) Explain(ctx context.Context, userID, databaseID int64, sqlText string, analyze bool) (string, error) {
 	if userID <= 0 || databaseID <= 0 {
 		return "", fmt.Errorf("%w: user and database ID must be positive", ErrInvalidArgument)
 	}
@@ -137,12 +136,28 @@ func (s *Service) Explain(ctx context.Context, userID, databaseID int64, sqlText
 	if err != nil {
 		return "", err
 	}
-	// EXPLAIN only asks the PostgreSQL planner for a plan. A short deadline
-	// bounds unusually expensive planning while never applying the statement.
+	// Bound planning and execution time, including potentially expensive ANALYZE queries.
 	opCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 	var plan []byte
-	if err := target.QueryRowContext(opCtx, "EXPLAIN (FORMAT JSON) "+sqlText).Scan(&plan); err != nil {
+	if analyze {
+		tx, err := target.BeginTx(opCtx, nil)
+		if err != nil {
+			return "", fmt.Errorf("explain analyze migration SQL: %s", describeError(err))
+		}
+		defer tx.Rollback()
+		for _, stmt := range []string{
+			"SET LOCAL statement_timeout = '15s'",
+			"SET LOCAL lock_timeout = '5s'",
+		} {
+			if _, err := tx.ExecContext(opCtx, stmt); err != nil {
+				return "", fmt.Errorf("explain analyze migration SQL: %s", describeError(err))
+			}
+		}
+		if err := tx.QueryRowContext(opCtx, "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) "+sqlText).Scan(&plan); err != nil {
+			return "", fmt.Errorf("explain analyze migration SQL: %s", describeError(err))
+		}
+	} else if err := target.QueryRowContext(opCtx, "EXPLAIN (FORMAT JSON) "+sqlText).Scan(&plan); err != nil {
 		return "", fmt.Errorf("explain migration SQL: %s", describeError(err))
 	}
 	var pretty bytes.Buffer

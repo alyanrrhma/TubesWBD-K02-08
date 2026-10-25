@@ -76,7 +76,7 @@ func TestExplain_ValidatesAndAuthorizesBeforeConnecting(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := tc.svc.Explain(ctx, tc.uid, tc.dbID, tc.sql)
+			_, err := tc.svc.Explain(ctx, tc.uid, tc.dbID, tc.sql, false)
 			if !errors.Is(err, tc.want) {
 				t.Fatalf("want %v, got %v", tc.want, err)
 			}

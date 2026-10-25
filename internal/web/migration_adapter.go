@@ -64,11 +64,11 @@ func (a MigrationAdapter) Execute(ctx context.Context, userID, databaseID int64,
 	return &record, nil
 }
 
-func (a MigrationAdapter) Explain(ctx context.Context, userID, databaseID int64, sqlText string) (string, error) {
+func (a MigrationAdapter) Explain(ctx context.Context, userID, databaseID int64, sqlText string, analyze bool) (string, error) {
 	if a.Service == nil {
 		return "", errors.New("migration service is not configured")
 	}
-	plan, err := a.Service.Explain(ctx, userID, databaseID, sqlText)
+	plan, err := a.Service.Explain(ctx, userID, databaseID, sqlText, analyze)
 	if errors.Is(err, migration.ErrForbidden) {
 		return "", access.ErrForbidden
 	}

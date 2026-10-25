@@ -97,7 +97,7 @@ type MigrationRecord struct {
 type Migrations interface {
 	History(ctx context.Context, userID, databaseID int64, page, pageSize int) ([]MigrationRecord, int, error)
 	Detail(ctx context.Context, userID, databaseID, version int64) (*MigrationRecord, error)
-	Explain(ctx context.Context, userID, databaseID int64, sql string) (string, error)
+	Explain(ctx context.Context, userID, databaseID int64, sql string, analyze bool) (string, error)
 	DiffSchema(ctx context.Context, userID, databaseID int64, desiredJSON string) (migration.SchemaDiffResult, error)
 	CurrentSchema(ctx context.Context, userID, databaseID int64, schema string) (string, error)
 	Execute(ctx context.Context, userID, databaseID int64, sql string) (*MigrationRecord, error)

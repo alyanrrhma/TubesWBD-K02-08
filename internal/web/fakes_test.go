@@ -259,7 +259,7 @@ func (m *recordingMigrations) Execute(ctx context.Context, u, d int64, sql strin
 	return &rec, nil
 }
 
-func (m *recordingMigrations) Explain(ctx context.Context, u, d int64, sql string) (string, error) {
+func (m *recordingMigrations) Explain(ctx context.Context, u, d int64, sql string, analyze bool) (string, error) {
 	if err := m.access.Require(ctx, u, d, access.ViewEdit); err != nil {
 		return "", err
 	}
