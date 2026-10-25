@@ -65,6 +65,8 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /databases/{databaseID}/migrations", authed(s.migrationsPage))
 	mux.Handle("GET /databases/{databaseID}/migrations/{version}", authed(s.migrationDetailPage))
 	mux.Handle("POST /databases/{databaseID}/migrations/explain", authed(s.migrationsExplain))
+	mux.Handle("GET /databases/{databaseID}/schema-diff", authed(s.schemaDiffPage))
+	mux.Handle("POST /databases/{databaseID}/schema-diff", authed(s.schemaDiffSubmit))
 	mux.Handle("POST /databases/{databaseID}/migrations", authed(s.migrationsExecute))
 
 	// Admin (hanya Platform Admin)

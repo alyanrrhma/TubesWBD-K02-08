@@ -487,6 +487,28 @@ func TestMigrationExplainShowsPlanBeforeExecution(t *testing.T) {
 	}
 }
 
+func TestSchemaDiffGeneratesEditableCandidateAndRequiresEditAccess(t *testing.T) {
+	e := newEnv(t)
+	alice := e.login("alice")
+	_, body := e.get(alice, "/databases/100/schema-diff")
+	if !strings.Contains(body, "Schema diff") || !strings.Contains(body, `name="desired_schema"`) || !strings.Contains(body, `"schema":"public"`) {
+		t.Fatal("schema diff page should show current schema as editable JSON")
+	}
+	desired := `{"schema":"public","tables":[]}`
+	resp, body := e.postCSRF(alice, "/databases/100/schema-diff", url.Values{"desired_schema": {desired}})
+	if resp.StatusCode != http.StatusOK || !strings.Contains(body, "Perubahan schema") || !strings.Contains(body, `name="sql"`) || !strings.Contains(body, "DROP TABLE") || !strings.Contains(body, "Perubahan destruktif") {
+		t.Fatalf("schema diff should render the change and editable SQL candidate, status %d", resp.StatusCode)
+	}
+	if len(e.migs.history) != 0 {
+		t.Fatal("schema diff must not execute a migration")
+	}
+	bob := e.login("bob")
+	resp, _ = e.postCSRF(bob, "/databases/100/schema-diff", url.Values{"desired_schema": {desired}})
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("View Only schema diff POST: status %d, want 403", resp.StatusCode)
+	}
+}
+
 func TestMigrationExecuteSuccessFailureAndEmpty(t *testing.T) {
 	e := newEnv(t)
 	alice := e.login("alice")

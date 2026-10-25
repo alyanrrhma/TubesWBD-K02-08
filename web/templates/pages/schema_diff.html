@@ -1,0 +1,70 @@
+{{define "content"}}
+{{with .Data}}
+<nav class="crumbs" aria-label="Lokasi"><a href="/dashboard">Database</a> / <a href="/databases/{{.DB.ID}}">{{.DB.Name}}</a> / <span>Schema diff</span></nav>
+<header class="pagehead">
+  <h1>Schema diff</h1>
+  <span class="level level-{{levelClass .DB.Level}}">{{levelLabel .DB.Level}}</span>
+</header>
+<nav class="tabs" aria-label="Bagian database">
+  <a href="/databases/{{.DB.ID}}">Schema dan tabel</a>
+  <a href="/databases/{{.DB.ID}}/migrations">Migration</a>
+  <a href="/databases/{{.DB.ID}}/schema-diff" aria-current="page">Schema diff</a>
+</nav>
+
+<section>
+  <h2>Bandingkan dengan schema yang diinginkan</h2>
+  <p>Masukkan definisi target dalam JSON. Sistem membandingkan nama tabel, nama kolom, tipe data, dan nullable dengan kondisi database saat ini. Constraint, index, default, dan generated column tidak diubah oleh generator.</p>
+  {{if .Failure}}<div class="flash flash-error" role="alert">{{.Failure}}</div>{{end}}
+  {{if canEdit .DB.Level}}
+  {{if .Schemas}}
+  <form method="get" action="/databases/{{.DB.ID}}/schema-diff" class="stack">
+    <label>Schema database saat ini
+      <select name="schema">
+        {{range .Schemas}}<option value="{{.}}"{{if eq . $.Data.Selected}} selected{{end}}>{{.}}</option>{{end}}
+      </select>
+    </label>
+    <button class="btn btn-secondary" type="submit">Muat schema saat ini</button>
+  </form>
+  {{end}}
+  <form method="post" action="/databases/{{.DB.ID}}/schema-diff" class="stack">
+    <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+    <label>Definisi schema target (JSON)
+      <textarea name="desired_schema" class="sql" rows="16" spellcheck="false" required>{{.Desired}}</textarea>
+    </label>
+    <details><summary>Contoh format JSON</summary><pre class="sqlblock">{{.Example}}</pre></details>
+    <p class="muted">Tipe yang didukung: smallint, integer, bigint, text, boolean, date/time, uuid, json/jsonb, bytea, real, double precision, numeric/decimal, varchar, char.</p>
+    <button class="btn" type="submit">Bandingkan schema</button>
+  </form>
+  {{else}}
+  <div class="notice"><strong>Akses View Only.</strong> Membuat kandidat migration memerlukan akses View + Edit.</div>
+  {{end}}
+</section>
+
+{{if .Result}}
+<section>
+  <h2>Perubahan schema</h2>
+  {{range .Result.Changes}}
+  <article class="notice">
+    <strong>{{.Kind}}{{if .Object}} · <span class="mono">{{.Object}}</span>{{end}}</strong>
+    <p>{{.Description}}</p>
+    {{if .Destructive}}<p class="errtext">Perubahan destruktif: data pada objek ini akan dihapus.</p>{{end}}
+  </article>
+  {{end}}
+</section>
+
+{{if .Result.SQL}}
+<section>
+  <h2>Kandidat SQL migration</h2>
+  <p>Tinjau dan ubah SQL sebelum menjalankan. Perubahan destruktif ditandai di atas. Eksekusi tetap memakai transaksi migration biasa.</p>
+  <form method="post" action="/databases/{{.DB.ID}}/migrations" class="stack">
+    <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+    <label>SQL yang dapat ditinjau dan diedit
+      <textarea name="sql" class="sql" rows="14" spellcheck="false" required>{{.Result.SQL}}</textarea>
+    </label>
+    <button class="btn" type="submit" data-confirm="Jalankan kandidat schema diff ini pada {{.DB.Name}}?">Jalankan migration</button>
+  </form>
+</section>
+{{end}}
+{{end}}
+{{end}}
+{{end}}

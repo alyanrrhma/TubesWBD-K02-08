@@ -8,6 +8,7 @@
 <nav class="tabs" aria-label="Bagian database">
   <a href="/databases/{{.DB.ID}}">Schema dan tabel</a>
   <a href="/databases/{{.DB.ID}}/migrations" aria-current="page">Migration</a>
+  <a href="/databases/{{.DB.ID}}/schema-diff">Schema diff</a>
 </nav>
 
   {{if canEdit .DB.Level}}

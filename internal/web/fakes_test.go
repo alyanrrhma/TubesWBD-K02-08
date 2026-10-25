@@ -268,3 +268,20 @@ func (m *recordingMigrations) Explain(ctx context.Context, u, d int64, sql strin
 	}
 	return `[{"Plan":{"Node Type":"Result","Startup Cost":0.00,"Total Cost":0.01,"Plan Rows":1}}]`, nil
 }
+
+func (m *recordingMigrations) DiffSchema(ctx context.Context, u, d int64, desiredJSON string) (migration.SchemaDiffResult, error) {
+	if err := m.access.Require(ctx, u, d, access.ViewEdit); err != nil {
+		return migration.SchemaDiffResult{}, err
+	}
+	return migration.SchemaDiffResult{
+		Changes: []migration.SchemaChange{{Kind: "DROP TABLE", Object: "old_table", Description: "Menghapus tabel beserta seluruh datanya.", Destructive: true}},
+		SQL:     `DROP TABLE "public"."old_table";`,
+	}, nil
+}
+
+func (m *recordingMigrations) CurrentSchema(ctx context.Context, u, d int64, schema string) (string, error) {
+	if err := m.access.Require(ctx, u, d, access.ViewEdit); err != nil {
+		return "", err
+	}
+	return `{"schema":"public","tables":[{"name":"customers","columns":[{"name":"id","type":"bigint","nullable":false},{"name":"email","type":"text","nullable":false}]}]}`, nil
+}
