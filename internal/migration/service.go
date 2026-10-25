@@ -1,8 +1,10 @@
 package migration
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -100,6 +102,69 @@ func (s *Service) Execute(ctx context.Context, userID, databaseID int64, sqlText
 		return rec, fmt.Errorf("%w: %v", ErrHistoryNotRecorded, err)
 	}
 	return rec, nil
+}
+
+// Explain returns PostgreSQL's execution plan. Analyze mode executes the query
+// inside a transaction that is always rolled back after collecting the plan.
+func (s *Service) Explain(ctx context.Context, userID, databaseID int64, sqlText string, analyze bool) (string, error) {
+	if userID <= 0 || databaseID <= 0 {
+		return "", fmt.Errorf("%w: user and database ID must be positive", ErrInvalidArgument)
+	}
+	ok, err := s.authz.CanEdit(ctx, userID, databaseID)
+	if err != nil {
+		return "", fmt.Errorf("check edit access: %w", err)
+	}
+	if !ok {
+		return "", ErrForbidden
+	}
+
+	sqlText = strings.TrimSpace(sqlText)
+	switch {
+	case sqlText == "":
+		return "", ErrEmptySQL
+	case len(sqlText) > maxSQLBytes:
+		return "", ErrSQLTooLarge
+	case strings.ContainsRune(sqlText, 0):
+		return "", ErrInvalidSQL
+	case strings.ContainsRune(sqlText, ';'):
+		// Reject separators conservatively so a second command cannot follow
+		// the EXPLAIN request through a driver/protocol mode that permits batches.
+		return "", ErrExplainSingleStatement
+	}
+
+	target, err := s.targets.Get(databaseID)
+	if err != nil {
+		return "", err
+	}
+	// Bound planning and execution time, including potentially expensive ANALYZE queries.
+	opCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	var plan []byte
+	if analyze {
+		tx, err := target.BeginTx(opCtx, nil)
+		if err != nil {
+			return "", fmt.Errorf("explain analyze migration SQL: %s", describeError(err))
+		}
+		defer tx.Rollback()
+		for _, stmt := range []string{
+			"SET LOCAL statement_timeout = '15s'",
+			"SET LOCAL lock_timeout = '5s'",
+		} {
+			if _, err := tx.ExecContext(opCtx, stmt); err != nil {
+				return "", fmt.Errorf("explain analyze migration SQL: %s", describeError(err))
+			}
+		}
+		if err := tx.QueryRowContext(opCtx, "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) "+sqlText).Scan(&plan); err != nil {
+			return "", fmt.Errorf("explain analyze migration SQL: %s", describeError(err))
+		}
+	} else if err := target.QueryRowContext(opCtx, "EXPLAIN (FORMAT JSON) "+sqlText).Scan(&plan); err != nil {
+		return "", fmt.Errorf("explain migration SQL: %s", describeError(err))
+	}
+	var pretty bytes.Buffer
+	if err := json.Indent(&pretty, plan, "", "  "); err != nil {
+		return string(plan), nil
+	}
+	return pretty.String(), nil
 }
 
 // Menjalankan SQL migration dalam transaksi: commit jika semua berhasil,

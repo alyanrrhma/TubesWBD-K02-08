@@ -64,6 +64,39 @@ func (a MigrationAdapter) Execute(ctx context.Context, userID, databaseID int64,
 	return &record, nil
 }
 
+func (a MigrationAdapter) Explain(ctx context.Context, userID, databaseID int64, sqlText string, analyze bool) (string, error) {
+	if a.Service == nil {
+		return "", errors.New("migration service is not configured")
+	}
+	plan, err := a.Service.Explain(ctx, userID, databaseID, sqlText, analyze)
+	if errors.Is(err, migration.ErrForbidden) {
+		return "", access.ErrForbidden
+	}
+	return plan, err
+}
+
+func (a MigrationAdapter) DiffSchema(ctx context.Context, userID, databaseID int64, desiredJSON string) (migration.SchemaDiffResult, error) {
+	if a.Service == nil {
+		return migration.SchemaDiffResult{}, errors.New("migration service is not configured")
+	}
+	result, err := a.Service.DiffSchema(ctx, userID, databaseID, desiredJSON)
+	if errors.Is(err, migration.ErrForbidden) {
+		return migration.SchemaDiffResult{}, access.ErrForbidden
+	}
+	return result, err
+}
+
+func (a MigrationAdapter) CurrentSchema(ctx context.Context, userID, databaseID int64, schema string) (string, error) {
+	if a.Service == nil {
+		return "", errors.New("migration service is not configured")
+	}
+	definition, err := a.Service.CurrentSchema(ctx, userID, databaseID, schema)
+	if errors.Is(err, migration.ErrForbidden) {
+		return "", access.ErrForbidden
+	}
+	return definition, err
+}
+
 func migrationRecords(items []migration.Migration) []MigrationRecord {
 	records := make([]MigrationRecord, 0, len(items))
 	for _, item := range items {

@@ -4,19 +4,23 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
+	"github.com/alyanrrhma/TubesWBD-K02-08/internal/access"
 	"github.com/alyanrrhma/TubesWBD-K02-08/internal/migration"
 )
 
 type migrationsPageData struct {
-	DB      *DatabaseView
-	History []MigrationRecord
-	Page    int
-	Pages   int
-	Prev    int
-	Next    int
-	Draft   string // SQL yang dipertahankan saat eksekusi gagal
-	Failure string // pesan kegagalan eksekusi (rollback)
+	DB       *DatabaseView
+	History  []MigrationRecord
+	Page     int
+	Pages    int
+	Prev     int
+	Next     int
+	Draft    string // SQL yang dipertahankan saat eksekusi gagal
+	Failure  string // pesan kegagalan eksekusi (rollback)
+	Plan     string // JSON execution plan hasil EXPLAIN
+	Analyzed bool   // true bila plan memuat hasil aktual dari EXPLAIN ANALYZE
 }
 
 type migrationDetailPageData struct {
@@ -31,10 +35,14 @@ func (s *Server) migrationsPage(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	s.renderMigrations(w, r, id, http.StatusOK, "", "")
+	s.renderMigrations(w, r, id, http.StatusOK, "", "", "")
 }
 
-func (s *Server) renderMigrations(w http.ResponseWriter, r *http.Request, id int64, status int, draft, failure string) {
+func (s *Server) renderMigrations(w http.ResponseWriter, r *http.Request, id int64, status int, draft, failure, plan string) {
+	s.renderMigrationsMode(w, r, id, status, draft, failure, plan, false)
+}
+
+func (s *Server) renderMigrationsMode(w http.ResponseWriter, r *http.Request, id int64, status int, draft, failure, plan string, analyzed bool) {
 	ctx, uid := r.Context(), currentUser(r).ID
 	db, err := s.Viewer.Database(ctx, uid, id)
 	if err != nil {
@@ -64,7 +72,45 @@ func (s *Server) renderMigrations(w http.ResponseWriter, r *http.Request, id int
 		return
 	}
 	s.render(w, r, status, "migrations", "Migration · "+db.Name, "dashboard",
-		migrationsPageData{DB: db, History: history, Page: page, Pages: totalPages, Prev: page - 1, Next: page + 1, Draft: draft, Failure: failure})
+		migrationsPageData{DB: db, History: history, Page: page, Pages: totalPages, Prev: page - 1, Next: page + 1, Draft: draft, Failure: failure, Plan: plan, Analyzed: analyzed})
+}
+
+func (s *Server) migrationsExplain(w http.ResponseWriter, r *http.Request) {
+	id, ok := s.pathID(w, r, "databaseID")
+	if !ok {
+		return
+	}
+	sql := r.PostFormValue("sql")
+	mode := r.PostFormValue("mode")
+	analyze := mode == "analyze"
+	if mode != "" && mode != "explain" && !analyze {
+		s.errorPage(w, r, http.StatusBadRequest, "Mode analisis tidak valid", "Pilih EXPLAIN atau EXPLAIN ANALYZE.")
+		return
+	}
+	plan, err := s.Migrations.Explain(r.Context(), currentUser(r).ID, id, sql, analyze)
+	if err != nil {
+		render := func(status int, failure string) {
+			s.renderMigrationsMode(w, r, id, status, sql, failure, "", analyze)
+		}
+		switch {
+		case errors.Is(err, migration.ErrExplainSingleStatement):
+			render(http.StatusUnprocessableEntity, "Analisis hanya menerima satu perintah SQL tanpa titik koma.")
+		case errors.Is(err, migration.ErrEmptySQL):
+			render(http.StatusUnprocessableEntity, "SQL migration tidak boleh kosong.")
+		case errors.Is(err, migration.ErrInvalidSQL):
+			render(http.StatusBadRequest, "SQL migration berisi karakter yang tidak valid.")
+		case errors.Is(err, migration.ErrSQLTooLarge):
+			s.errorPage(w, r, http.StatusRequestEntityTooLarge, "SQL terlalu besar", "Ukuran SQL migration melewati batas 1 MiB.")
+		case errors.Is(err, access.ErrForbidden):
+			s.fail(w, r, err)
+		default:
+			failure := strings.TrimPrefix(err.Error(), "explain migration SQL: ")
+			failure = strings.TrimPrefix(failure, "explain analyze migration SQL: ")
+			render(http.StatusUnprocessableEntity, "Execution plan tidak dapat dibuat: "+failure)
+		}
+		return
+	}
+	s.renderMigrationsMode(w, r, id, http.StatusOK, sql, "", plan, analyze)
 }
 
 func (s *Server) migrationsExecute(w http.ResponseWriter, r *http.Request) {
@@ -77,9 +123,9 @@ func (s *Server) migrationsExecute(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch {
 		case errors.Is(err, migration.ErrEmptySQL):
-			s.renderMigrations(w, r, id, http.StatusUnprocessableEntity, sql, "SQL migration tidak boleh kosong.")
+			s.renderMigrations(w, r, id, http.StatusUnprocessableEntity, sql, "SQL migration tidak boleh kosong.", "")
 		case errors.Is(err, migration.ErrInvalidSQL):
-			s.renderMigrations(w, r, id, http.StatusBadRequest, sql, "SQL migration berisi karakter yang tidak valid.")
+			s.renderMigrations(w, r, id, http.StatusBadRequest, sql, "SQL migration berisi karakter yang tidak valid.", "")
 		case errors.Is(err, migration.ErrSQLTooLarge):
 			s.errorPage(w, r, http.StatusRequestEntityTooLarge, "SQL terlalu besar", "Ukuran SQL migration melewati batas 1 MiB.")
 		default:
@@ -92,7 +138,7 @@ func (s *Server) migrationsExecute(w http.ResponseWriter, r *http.Request) {
 		if rec.ErrorMessage != "" {
 			msg += " " + rec.ErrorMessage
 		}
-		s.renderMigrations(w, r, id, http.StatusUnprocessableEntity, sql, msg)
+		s.renderMigrations(w, r, id, http.StatusUnprocessableEntity, sql, msg, "")
 		return
 	}
 	s.setFlash(w, "success", "Migration berhasil di-commit.")

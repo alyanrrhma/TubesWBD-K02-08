@@ -13,11 +13,12 @@ import "errors"
 
 // Catatan: migration yang gagal dieksekusi dikembalikan sebagai Migration dengan Status == StatusFailed dan ErrorMessage terisi.
 var (
-	ErrInvalidArgument    = errors.New("migration: invalid argument")
-	ErrEmptySQL           = errors.New("migration: sql is empty")
-	ErrSQLTooLarge        = errors.New("migration: sql is too large")
-	ErrInvalidSQL         = errors.New("migration: sql contains invalid characters")
-	ErrForbidden          = errors.New("migration: access denied")
-	ErrMigrationNotFound  = errors.New("migration: not found")
-	ErrHistoryNotRecorded = errors.New("migration: executed but history was not recorded")
+	ErrInvalidArgument        = errors.New("migration: invalid argument")
+	ErrEmptySQL               = errors.New("migration: sql is empty")
+	ErrSQLTooLarge            = errors.New("migration: sql is too large")
+	ErrInvalidSQL             = errors.New("migration: sql contains invalid characters")
+	ErrForbidden              = errors.New("migration: access denied")
+	ErrMigrationNotFound      = errors.New("migration: not found")
+	ErrHistoryNotRecorded     = errors.New("migration: executed but history was not recorded")
+	ErrExplainSingleStatement = errors.New("migration: EXPLAIN accepts one statement without a semicolon")
 )
